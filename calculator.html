@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2026 提成计算器 | Commission Calculator</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<style>
+:root {
+  --primary: #1a73e8;
+  --primary-light: #e8f0fe;
+  --primary-dark: #1557b0;
+  --bg: #f8f9fa;
+  --card-bg: #ffffff;
+  --text: #202124;
+  --text-secondary: #5f6368;
+  --border: #dadce0;
+  --success: #0d904f;
+  --warning: #e37400;
+  --danger: #c5221f;
+  --shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.12);
+  --radius: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+.app-header {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-lg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.app-header h1 { font-size: 20px; font-weight: 600; }
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.header-actions button, .header-actions label {
+  background: rgba(255,255,255,0.15);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.header-actions button:hover, .header-actions label:hover {
+  background: rgba(255,255,255,0.25);
+}
+.lang-toggle {
+  background: rgba(255,255,255,0.9) !important;
+  color: var(--primary) !important;
+  font-weight: 600;
+}
+.tab-bar {
+  display: flex;
+  gap: 0;
+  background: white;
+  border-bottom: 2px solid var(--border);
+  padding: 0 16px;
+  overflow-x: auto;
+}
+.tab-bar button {
+  background: none;
+  border: none;
+  padding: 12px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-secondary);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.tab-bar button:hover { color: var(--primary); background: var(--primary-light); }
+.tab-bar button.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+.content { max-width: 1400px; margin: 0 auto; padding: 20px; }
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--primary-light);
+  color: var(--primary-dark);
+}
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--border); }
+th { background: #f1f3f4; font-weight: 600; color: var(--text-secondary); text-align: right; font-size: 12px; text-transform: uppercase; }
+th:first-child, td:first-child { text-align: left; }
+tr:hover td { background: #f8f9fa; }
+.editable-input {
+  background: var(--primary-light);
+  border: 1px solid #c2d7f2;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  width: 120px;
+  text-align: right;
+  color: #1557b0;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.editable-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(26,115,232,0.15);
+}
+.editable-input.narrow { width: 80px; }
+.param-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.param-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.param-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.scenario-header { text-align: center !important; }
+.scenario-baseline { background: #fef7e0 !important; }
+.scenario-match { background: #e6f4ea !important; }
+.scenario-stretch { background: #e8f0fe !important; }
+.scenario-excellence { background: #fce8e6 !important; }
+.num-positive { color: var(--success); }
+.num-negative { color: var(--danger); }
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.summary-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.summary-card h4 { font-size: 14px; color: var(--text-secondary); margin-bottom: 8px; }
+.summary-card .big-num { font-size: 24px; font-weight: 700; color: var(--primary); }
+.summary-card .sub-num { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.employee-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.employee-avatar {
+  width: 48px; height: 48px;
+  background: var(--primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 600;
+}
+.employee-info h2 { font-size: 20px; }
+.employee-info p { font-size: 13px; color: var(--text-secondary); }
+.custom-scenario {
+  background: linear-gradient(135deg, var(--primary-light), #fff);
+  border: 2px dashed var(--primary);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-top: 20px;
+}
+.custom-scenario h3 { font-size: 15px; color: var(--primary); margin-bottom: 12px; }
+.slider-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.slider-group input[type="range"] {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  background: linear-gradient(to right, var(--danger), var(--warning), var(--success));
+  border-radius: 3px;
+  outline: none;
+}
+.slider-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px; height: 20px;
+  background: white;
+  border: 3px solid var(--primary);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.result-item {
+  background: white;
+  border-radius: 6px;
+  padding: 12px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.result-item .label { font-size: 11px; color: var(--text-secondary); }
+.result-item .value { font-size: 18px; font-weight: 700; color: var(--primary); margin-top: 4px; }
+.footer {
+  background: #f1f3f4;
+  padding: 16px 24px;
+  margin-top: 20px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.footer table { font-size: 12px; }
+.footer th, .footer td { padding: 4px 8px; }
+.hidden-input { display: none; }
+.weight-warning { color: var(--danger); font-size: 12px; margin-top: 4px; font-weight: 500; }
+.team-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.team-account { background: #e6f4ea; color: #0d904f; }
+.team-bd { background: #e8f0fe; color: #1a73e8; }
+.role-director { font-style: italic; color: var(--primary); }
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.login-box {
+  background: white;
+  border-radius: 16px;
+  padding: 40px;
+  width: 380px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  text-align: center;
+}
+.login-box .login-icon {
+  width: 64px; height: 64px;
+  background: var(--primary-light);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  font-size: 28px;
+}
+.login-box h2 { font-size: 22px; margin-bottom: 6px; color: var(--text); }
+.login-box p { font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; }
+.login-box input[type="password"] {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.login-box input[type="password"]:focus { border-color: var(--primary); }
+.login-box .login-btn {
+  width: 100%;
+  padding: 12px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 16px;
+  transition: background 0.2s;
+}
+.login-box .login-btn:hover { background: var(--primary-dark); }
+.login-error {
+  color: var(--danger);
+  font-size: 13px;
+  margin-top: 10px;
+  min-height: 20px;
+}
+@media print {
+  .app-header, .tab-bar, .header-actions, .custom-scenario, .footer, button, .hidden-input, .login-overlay { display: none !important; }
+  .content { max-width: 100%; padding: 0; }
+  .card { box-shadow: none; border: 1px solid #ccc; page-break-inside: avoid; }
+  body { background: white; font-size: 11px; }
+}
+@media (max-width: 768px) {
+  .content { padding: 12px; }
+  .param-grid { grid-template-columns: 1fr; }
+  table { font-size: 11px; }
+  th, td { padding: 4px 6px; }
+  .editable-input { width: 90px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Login Screen -->
+  <div v-if="!authenticated" class="login-overlay">
+    <div class="login-box">
+      <div class="login-icon">&#128274;</div>
+      <h2>{{ t('2026 提成计算器', '2026 Commission Calculator') }}</h2>
+      <p>{{ t('请输入访问密码', 'Please enter password to continue') }}</p>
+      <form @submit.prevent="doLogin">
+        <input type="password" v-model="passwordInput" :placeholder="t('输入密码…', 'Enter password…')" autofocus>
+        <button type="submit" class="login-btn">{{ t('登 录', 'Log In') }}</button>
+      </form>
+      <div class="login-error">{{ loginError }}</div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header v-if="authenticated" class="app-header">
+    <h1>{{ t('2026 提成计算器', '2026 Commission Calculator') }}</h1>
+    <div class="header-actions">
+      <button class="lang-toggle" @click="lang = lang === 'zh' ? 'en' : 'zh'">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
+      <button @click="saveToFile">{{ t('保存', 'Save') }}</button>
+      <label>{{ t('加载', 'Load') }}<input type="file" class="hidden-input" accept=".json" @change="loadFromFile"></label>
+      <button @click="resetDefaults">{{ t('重置', 'Reset') }}</button>
+      <button @click="window.print()">{{ t('打印', 'Print') }}</button>
+    </div>
+  </header>
+
+  <!-- Tab Bar -->
+  <nav v-if="authenticated" class="tab-bar">
+    <button :class="{active: activeTab === 'dashboard'}" @click="activeTab = 'dashboard'">
+      {{ t('总览 Dashboard', 'Dashboard') }}
+    </button>
+    <template v-for="team in teams">
+      <button v-for="m in team.members" :key="m.id"
+              :class="{active: activeTab === m.id}"
+              @click="activeTab = m.id">
+        {{ m.name }}
+      </button>
+    </template>
+  </nav>
+
+  <div v-if="authenticated" class="content">
+    <!-- ============ DASHBOARD ============ -->
+    <template v-if="activeTab === 'dashboard'">
+      <!-- Global Parameters -->
+      <div class="card">
+        <div class="card-title">{{ t('全局参数 Global Parameters', 'Global Parameters') }}</div>
+        <div class="param-grid">
+          <div class="param-item" v-for="(w, i) in quarterlyWeights" :key="i">
+            <span class="param-label">{{ t('Q'+(i+1)+' 权重', 'Q'+(i+1)+' Weight') }}</span>
+            <div style="display:flex;align-items:center;gap:4px">
+              <input class="editable-input narrow" type="number" step="0.01"
+                     :value="(w * 100).toFixed(2)"
+                     @input="quarterlyWeights[i] = parseFloat($event.target.value) / 100 || 0">
+              <span>%</span>
+            </div>
+          </div>
+        </div>
+        <p v-if="weightWarning" class="weight-warning">{{ weightWarning }}</p>
+      </div>
+
+      <!-- Team Scenario Comparison -->
+      <div class="card" v-for="team in teams" :key="team.key">
+        <div class="card-title">
+          <span class="team-badge" :class="'team-' + team.key">{{ team.key.toUpperCase() }}</span>
+          {{ t(team.nameZh, team.nameEn) }} — {{ t('场景对比', 'Scenario Comparison') }}
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('姓名', 'Name') }}</th>
+                <th>{{ t('职位', 'Role') }}</th>
+                <th>{{ t('底薪', 'Base') }}</th>
+                <th class="scenario-header scenario-baseline">{{ t('基准 86%', 'Baseline 86%') }}</th>
+                <th class="scenario-header scenario-match">{{ t('目标 100%', 'HQ Match 100%') }}</th>
+                <th class="scenario-header scenario-stretch">{{ t('进取 105%', 'Stretch 105%') }}</th>
+                <th class="scenario-header scenario-excellence">{{ t('卓越 120%', 'Excellence 120%') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in team.members" :key="m.id" @click="activeTab = m.id" style="cursor:pointer">
+                <td><strong>{{ m.name }}</strong></td>
+                <td><span v-if="m.role === 'director'" class="role-director">{{ t(m.titleZh, m.titleEn) }}</span><span v-else>{{ t(m.titleZh, m.titleEn) }}</span></td>
+                <td>{{ fmtCurrency(m.baseSalary) }}</td>
+                <td class="scenario-baseline">{{ fmtCurrency(calcResult(m, 0).annualCommission) }}</td>
+                <td class="scenario-match">{{ fmtCurrency(calcResult(m, 1).annualCommission) }}</td>
+                <td class="scenario-stretch">{{ fmtCurrency(calcResult(m, 2).annualCommission) }}</td>
+                <td class="scenario-excellence">{{ fmtCurrency(calcResult(m, 3).annualCommission) }}</td>
+              </tr>
+              <tr style="font-weight:700; border-top:2px solid var(--border)">
+                <td colspan="2">{{ t('团队合计', 'Team Total') }}</td>
+                <td>{{ fmtCurrency(teamBaseTotal(team)) }}</td>
+                <td class="scenario-baseline">{{ fmtCurrency(teamCommTotal(team, 0)) }}</td>
+                <td class="scenario-match">{{ fmtCurrency(teamCommTotal(team, 1)) }}</td>
+                <td class="scenario-stretch">{{ fmtCurrency(teamCommTotal(team, 2)) }}</td>
+                <td class="scenario-excellence">{{ fmtCurrency(teamCommTotal(team, 3)) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TCC Summary -->
+      <div class="card">
+        <div class="card-title">{{ t('总薪酬对比 TCC Summary (100% Attainment)', 'TCC Summary (100% HQ Match)') }}</div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('姓名', 'Name') }}</th>
+                <th>{{ t('底薪', 'Base Salary') }}</th>
+                <th>{{ t('年度提成', 'Annual Commission') }}</th>
+                <th>{{ t('总薪酬 TCC', 'Total Comp (TCC)') }}</th>
+                <th>{{ t('提成占比', 'Commission %') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="team in teams">
+                <tr v-for="m in team.members" :key="m.id">
+                  <td><strong>{{ m.name }}</strong></td>
+                  <td>{{ fmtCurrency(m.baseSalary) }}</td>
+                  <td>{{ fmtCurrency(calcResult(m, 1).annualCommission) }}</td>
+                  <td><strong>{{ fmtCurrency(calcResult(m, 1).tcc) }}</strong></td>
+                  <td>{{ fmtPct(calcResult(m, 1).annualCommission / calcResult(m, 1).tcc) }}</td>
+                </tr>
+              </template>
+              <tr style="font-weight:700; border-top:2px solid var(--border)">
+                <td>{{ t('全部合计', 'Grand Total') }}</td>
+                <td>{{ fmtCurrency(grandBaseTotal) }}</td>
+                <td>{{ fmtCurrency(grandCommTotal(1)) }}</td>
+                <td>{{ fmtCurrency(grandBaseTotal + grandCommTotal(1)) }}</td>
+                <td>{{ fmtPct(grandCommTotal(1) / (grandBaseTotal + grandCommTotal(1))) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Summary Cards -->
+      <div class="summary-grid">
+        <div class="summary-card" v-for="(s, si) in scenarios" :key="s.key">
+          <h4>{{ t(s.labelZh, s.labelEn) }} ({{ fmtPct(s.attainment) }})</h4>
+          <div class="big-num">{{ fmtCurrency(grandBaseTotal + grandCommTotal(si)) }}</div>
+          <div class="sub-num">{{ t('总提成', 'Total Commission') }}: {{ fmtCurrency(grandCommTotal(si)) }}</div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ============ EMPLOYEE DETAIL ============ -->
+    <template v-if="activeTab !== 'dashboard'">
+      <template v-for="team in teams">
+        <template v-for="m in team.members">
+          <div v-if="activeTab === m.id" :key="m.id">
+            <!-- Header -->
+            <div class="employee-header">
+              <div class="employee-avatar">{{ m.name.charAt(0) }}</div>
+              <div class="employee-info">
+                <h2>{{ m.name }}</h2>
+                <p>
+                  {{ t(m.titleZh, m.titleEn) }} ·
+                  <span class="team-badge" :class="'team-' + team.key">{{ t(team.nameZh, team.nameEn) }}</span>
+                  <span v-if="m.role === 'director'" class="role-director"> · Override</span>
+                </p>
+              </div>
+            </div>
+
+            <!-- Editable Parameters -->
+            <div class="card">
+              <div class="card-title">{{ t('可编辑参数 Editable Parameters', 'Editable Parameters') }}</div>
+              <div class="param-grid">
+                <div class="param-item">
+                  <span class="param-label">{{ t('底薪 Base Salary', 'Base Salary') }}</span>
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <span>$</span>
+                    <input class="editable-input" type="number" v-model.number="m.baseSalary">
+                  </div>
+                </div>
+                <div class="param-item">
+                  <span class="param-label">{{ m.role === 'director' ? t('Override 提成比例', 'Override Rate') : t('提成比例 Commission Rate', 'Commission Rate') }}</span>
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <input class="editable-input narrow" type="number" step="0.001"
+                           :value="(m.rate * 100).toFixed(4)"
+                           @input="m.rate = parseFloat($event.target.value) / 100 || 0">
+                    <span>%</span>
+                  </div>
+                </div>
+                <div class="param-item">
+                  <span class="param-label">{{ m.role === 'director' ? t('团队收入目标', 'Team Revenue Target') : t('个人收入目标', 'Revenue Quota') }}</span>
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <span>$</span>
+                    <input class="editable-input" type="number" v-model.number="m.revenueTarget" style="width:160px">
+                  </div>
+                </div>
+                <div class="param-item" v-if="m.ref2025Commission !== undefined">
+                  <span class="param-label">{{ t('2025年提成参考', '2025 Commission Ref') }}</span>
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <span>$</span>
+                    <input class="editable-input" type="number" v-model.number="m.ref2025Commission">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Four-Scenario Breakdown -->
+            <div class="card">
+              <div class="card-title">{{ t('四场景明细 Four-Scenario Breakdown', 'Four-Scenario Breakdown') }}</div>
+              <div style="overflow-x:auto">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{{ t('指标 Metric', 'Metric') }}</th>
+                      <th class="scenario-header scenario-baseline">{{ t('基准', 'Baseline') }}<br>86%</th>
+                      <th class="scenario-header scenario-match">{{ t('目标', 'HQ Match') }}<br>100%</th>
+                      <th class="scenario-header scenario-stretch">{{ t('进取', 'Stretch') }}<br>105%</th>
+                      <th class="scenario-header scenario-excellence">{{ t('卓越', 'Excellence') }}<br>120%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>{{ t('达成率 Attainment', 'Attainment') }}</td>
+                      <td v-for="(s,si) in scenarios" :key="si" :class="scenarioClass(si)">{{ fmtPct(s.attainment) }}</td>
+                    </tr>
+                    <tr>
+                      <td>{{ t('收入乘数 Revenue Multiplier', 'Revenue Multiplier') }}</td>
+                      <td v-for="(s,si) in scenarios" :key="si" :class="scenarioClass(si)">×{{ calcResult(m, si).multiplier.toFixed(2) }}</td>
+                    </tr>
+                    <tr>
+                      <td>{{ t('场景收入目标', 'Scenario Revenue') }}</td>
+                      <td v-for="(s,si) in scenarios" :key="si" :class="scenarioClass(si)">{{ fmtCurrency(m.revenueTarget * s.attainment) }}</td>
+                    </tr>
+                    <tr style="font-weight:700">
+                      <td>{{ t('年度提成 Annual Commission', 'Annual Commission') }}</td>
+                      <td v-for="(s,si) in scenarios" :key="si" :class="scenarioClass(si)">{{ fmtCurrency(calcResult(m, si).annualCommission) }}</td>
+                    </tr>
+                    <tr v-for="qi in 4" :key="'q'+qi">
+                      <td>Q{{ qi }} {{ t('提成', 'Commission') }} ({{ fmtPct(quarterlyWeights[qi-1]) }})</td>
+                      <td v-for="(s,si) in scenarios" :key="si" :class="scenarioClass(si)">{{ fmtCurrency(calcResult(m, si).quarterly[qi-1]) }}</td>
+                    </tr>
+                    <tr style="font-weight:700; border-top:2px solid var(--primary)">
+                      <td>{{ t('总薪酬 TCC', 'Total Compensation') }}</td>
+                      <td v-for="(s,si) in scenarios" :key="si" :class="scenarioClass(si)">{{ fmtCurrency(calcResult(m, si).tcc) }}</td>
+                    </tr>
+                    <tr v-if="m.ref2025Commission">
+                      <td>{{ t('提成较2025变化', 'Commission vs 2025') }}</td>
+                      <td v-for="(s,si) in scenarios" :key="si" :class="scenarioClass(si)">
+                        <span :class="calcResult(m, si).annualCommission >= m.ref2025Commission ? 'num-positive' : 'num-negative'">
+                          {{ fmtPct((calcResult(m, si).annualCommission - m.ref2025Commission) / m.ref2025Commission) }}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Custom Scenario -->
+            <div class="custom-scenario">
+              <h3>{{ t('自定义场景模拟 What-If Scenario', 'What-If Scenario') }}</h3>
+              <div class="slider-group">
+                <span style="min-width:80px">{{ t('达成率', 'Attainment') }}</span>
+                <input type="range" min="50" max="150" step="1" v-model.number="customAttainment">
+                <input class="editable-input narrow" type="number" v-model.number="customAttainment" min="50" max="150">
+                <span>%</span>
+              </div>
+              <div class="result-grid">
+                <div class="result-item">
+                  <div class="label">{{ t('收入乘数', 'Multiplier') }}</div>
+                  <div class="value">×{{ customResult(m).multiplier.toFixed(2) }}</div>
+                </div>
+                <div class="result-item">
+                  <div class="label">{{ t('年度提成', 'Annual Commission') }}</div>
+                  <div class="value">{{ fmtCurrency(customResult(m).annualCommission) }}</div>
+                </div>
+                <div class="result-item">
+                  <div class="label">{{ t('总薪酬 TCC', 'Total Comp') }}</div>
+                  <div class="value">{{ fmtCurrency(customResult(m).tcc) }}</div>
+                </div>
+                <div class="result-item" v-for="qi in 4" :key="'cq'+qi">
+                  <div class="label">Q{{ qi }} {{ t('提成', 'Comm.') }}</div>
+                  <div class="value">{{ fmtCurrency(customResult(m).quarterly[qi-1]) }}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Formula Reference -->
+            <div class="card" style="margin-top:20px">
+              <div class="card-title">{{ t('公式说明 Formula Reference', 'Formula Reference') }}</div>
+              <div v-if="m.role === 'director'" style="font-size:13px; line-height:2">
+                <p><strong>Override Commission</strong> = {{ t('团队收入目标', 'Team Revenue Target') }} × Override Rate × Revenue Multiplier</p>
+                <p>= {{ fmtCurrency(m.revenueTarget) }} × {{ (m.rate * 100).toFixed(4) }}% × Multiplier</p>
+                <p>{{ t('年度提成 (100%)', 'Annual Commission (100%)') }} = {{ fmtCurrency(m.revenueTarget) }} × {{ (m.rate * 100).toFixed(4) }}% × 1.00 = <strong>{{ fmtCurrency(calcResult(m, 1).annualCommission) }}</strong></p>
+              </div>
+              <div v-else style="font-size:13px; line-height:2">
+                <p><strong>Commission</strong> = {{ t('个人收入目标', 'Revenue Quota') }} × Commission Rate × Revenue Multiplier</p>
+                <p>= {{ fmtCurrency(m.revenueTarget) }} × {{ (m.rate * 100).toFixed(4) }}% × Multiplier</p>
+                <p>{{ t('年度提成 (100%)', 'Annual Commission (100%)') }} = {{ fmtCurrency(m.revenueTarget) }} × {{ (m.rate * 100).toFixed(4) }}% × 1.00 = <strong>{{ fmtCurrency(calcResult(m, 1).annualCommission) }}</strong></p>
+              </div>
+              <p style="font-size:12px; color:var(--text-secondary); margin-top:8px">
+                {{ t('季度提成 = 年度提成 × 季度权重 | 结算周期：季末后30天内发放', 'Quarterly Commission = Annual Commission × Quarterly Weight | Settlement: within 30 days after quarter-end') }}
+              </p>
+            </div>
+          </div>
+        </template>
+      </template>
+    </template>
+
+    <!-- Footer -->
+    <div class="footer">
+      <strong>{{ t('收入乘数规则 Revenue Multiplier Rules', 'Revenue Multiplier Rules') }}:</strong>
+      <table style="margin-top:8px">
+        <tr><th>{{ t('达成率', 'Attainment') }}</th><th>{{ t('乘数', 'Multiplier') }}</th></tr>
+        <tr><td>&lt;86%</td><td>×0.80</td></tr>
+        <tr><td>86%–99%</td><td>×{{ t('实际达成率', 'Actual %') }}</td></tr>
+        <tr><td>100%–104%</td><td>×1.00</td></tr>
+        <tr><td>105%–119%</td><td>×1.10</td></tr>
+        <tr><td>≥120%</td><td>×1.20 ({{ t('上限', 'cap') }})</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onMounted } = Vue;
+
+const STORAGE_KEY = 'commissionCalc2026';
+
+function defaultTeams() {
+  return [
+    {
+      key: 'account', nameZh: '客户团队', nameEn: 'Account Team',
+      members: [
+        { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, ref2025Commission: 6000 },
+        { id: 'nancy', name: 'Nancy (TBD)', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 110000, rate: 0.0008, revenueTarget: 31618064, ref2025Commission: 20516 },
+        { id: 'justin', name: 'Justin', titleZh: '客户经理', titleEn: 'Account Mgr', role: 'individual', baseSalary: 75000, rate: 0.0008, revenueTarget: 31618064, ref2025Commission: 6091 },
+      ]
+    },
+    {
+      key: 'bd', nameZh: 'BD团队', nameEn: 'BD Team',
+      members: [
+        { id: 'jonathan', name: 'Jonathan', titleZh: 'BD总监', titleEn: 'BD Director', role: 'director', baseSalary: 165000, rate: 0.0065, revenueTarget: 6323613, ref2025Commission: 24778 },
+        { id: 'daniel', name: 'Daniel', titleZh: 'BD经理', titleEn: 'BD Manager', role: 'individual', baseSalary: 125000, rate: 0.008, revenueTarget: 3161806, ref2025Commission: 0 },
+        { id: 'dash', name: 'Dash', titleZh: 'BD专员', titleEn: 'BD Specialist', role: 'individual', baseSalary: 96000, rate: 0.012, revenueTarget: 2023556, ref2025Commission: 0 },
+      ]
+    }
+  ];
+}
+
+function defaultScenarios() {
+  return [
+    { key: 'baseline', labelZh: '基准 Baseline', labelEn: 'Baseline', attainment: 0.86 },
+    { key: 'match', labelZh: '目标 HQ Match', labelEn: 'HQ Match', attainment: 1.00 },
+    { key: 'stretch', labelZh: '进取 Stretch', labelEn: 'Stretch', attainment: 1.05 },
+    { key: 'excellence', labelZh: '卓越 Excellence', labelEn: 'Excellence', attainment: 1.20 },
+  ];
+}
+
+function defaultWeights() {
+  return [0.223214, 0.275008, 0.21694, 0.284838];
+}
+
+function getMultiplier(attainment) {
+  if (attainment < 0.86) return 0.80;
+  if (attainment < 1.00) return attainment;
+  if (attainment < 1.05) return 1.00;
+  if (attainment < 1.20) return 1.10;
+  return 1.20;
+}
+
+function calcCommission(member, attainment, weights) {
+  const multiplier = getMultiplier(attainment);
+  const annualCommission = member.revenueTarget * member.rate * multiplier;
+  const quarterly = weights.map(w => annualCommission * w);
+  const tcc = member.baseSalary + annualCommission;
+  return { multiplier, annualCommission, quarterly, tcc };
+}
+
+const app = createApp({
+  setup() {
+    const PASSWORD_HASH = '5a4b3c'; // simple hash of '2026sales'
+    const TOKEN = '2026_sales_commission';
+    const urlToken = new URLSearchParams(window.location.search).get('token');
+    if (urlToken === TOKEN) sessionStorage.setItem('commCalcAuth', 'true');
+    const authenticated = ref(sessionStorage.getItem('commCalcAuth') === 'true');
+    const passwordInput = ref('');
+    const loginError = ref('');
+
+    function simpleHash(s) {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) & 0xffffff;
+      return h.toString(16);
+    }
+
+    function doLogin() {
+      if (passwordInput.value === '2026sales') {
+        authenticated.value = true;
+        sessionStorage.setItem('commCalcAuth', 'true');
+        loginError.value = '';
+      } else {
+        loginError.value = lang.value === 'zh' ? '密码错误，请重试' : 'Incorrect password, please try again';
+      }
+      passwordInput.value = '';
+    }
+
+    const lang = ref('zh');
+    const activeTab = ref('dashboard');
+    const customAttainment = ref(100);
+    const teams = reactive(defaultTeams());
+    const scenarios = reactive(defaultScenarios());
+    const quarterlyWeights = reactive(defaultWeights());
+
+    function t(zh, en) { return lang.value === 'zh' ? zh : en; }
+
+    const currencyFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const currencyFmtDetail = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function fmtCurrency(n) { return Math.abs(n) >= 10000 ? currencyFmt.format(n) : currencyFmtDetail.format(n); }
+    function fmtPct(n) { return (n * 100).toFixed(2) + '%'; }
+
+    function calcResult(member, scenarioIndex) {
+      return calcCommission(member, scenarios[scenarioIndex].attainment, quarterlyWeights);
+    }
+
+    function customResult(member) {
+      return calcCommission(member, customAttainment.value / 100, quarterlyWeights);
+    }
+
+    function teamBaseTotal(team) {
+      return team.members.reduce((s, m) => s + m.baseSalary, 0);
+    }
+    function teamCommTotal(team, si) {
+      return team.members.reduce((s, m) => s + calcResult(m, si).annualCommission, 0);
+    }
+
+    const grandBaseTotal = computed(() => teams.reduce((s, t) => s + teamBaseTotal(t), 0));
+    function grandCommTotal(si) {
+      return teams.reduce((s, t) => s + teamCommTotal(t, si), 0);
+    }
+
+    const weightWarning = computed(() => {
+      const sum = quarterlyWeights.reduce((a, b) => a + b, 0);
+      if (Math.abs(sum - 1) > 0.01) {
+        return lang.value === 'zh'
+          ? `季度权重之和为 ${(sum*100).toFixed(2)}%，与100%偏差较大`
+          : `Quarterly weights sum to ${(sum*100).toFixed(2)}%, deviates from 100%`;
+      }
+      return '';
+    });
+
+    function scenarioClass(si) {
+      return ['scenario-baseline', 'scenario-match', 'scenario-stretch', 'scenario-excellence'][si];
+    }
+
+    function getState() {
+      return { lang: lang.value, activeTab: activeTab.value, customAttainment: customAttainment.value, teams: JSON.parse(JSON.stringify(teams)), scenarios: JSON.parse(JSON.stringify(scenarios)), quarterlyWeights: [...quarterlyWeights] };
+    }
+
+    function loadState(state) {
+      if (!state) return;
+      if (state.lang) lang.value = state.lang;
+      if (state.activeTab) activeTab.value = state.activeTab;
+      if (state.customAttainment) customAttainment.value = state.customAttainment;
+      if (state.quarterlyWeights) state.quarterlyWeights.forEach((v, i) => quarterlyWeights[i] = v);
+      if (state.scenarios) state.scenarios.forEach((s, i) => { if (scenarios[i]) Object.assign(scenarios[i], s); });
+      if (state.teams) {
+        state.teams.forEach((st, ti) => {
+          if (teams[ti]) {
+            st.members.forEach((sm, mi) => {
+              if (teams[ti].members[mi]) Object.assign(teams[ti].members[mi], sm);
+            });
+          }
+        });
+      }
+    }
+
+    let saveTimeout;
+    function autoSave() {
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(getState())); } catch(e) {}
+      }, 500);
+    }
+
+    watch([teams, scenarios, quarterlyWeights, lang, customAttainment], autoSave, { deep: true });
+
+    function saveToFile() {
+      const blob = new Blob([JSON.stringify(getState(), null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `commission_calc_${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    function loadFromFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const state = JSON.parse(reader.result);
+          loadState(state);
+        } catch(err) {
+          alert(lang.value === 'zh' ? '文件格式错误' : 'Invalid file format');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    }
+
+    function resetDefaults() {
+      if (!confirm(lang.value === 'zh' ? '确定重置为默认值？' : 'Reset to defaults?')) return;
+      const dt = defaultTeams();
+      dt.forEach((t, ti) => t.members.forEach((m, mi) => Object.assign(teams[ti].members[mi], m)));
+      defaultScenarios().forEach((s, i) => Object.assign(scenarios[i], s));
+      defaultWeights().forEach((v, i) => quarterlyWeights[i] = v);
+      customAttainment.value = 100;
+      localStorage.removeItem(STORAGE_KEY);
+    }
+
+    onMounted(() => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) loadState(JSON.parse(saved));
+      } catch(e) {}
+      selfTest();
+    });
+
+    function selfTest() {
+      const emily = teams[0].members[0];
+      const r100 = calcCommission(emily, 1.00, quarterlyWeights);
+      const expected = 63236128 * 0.00065 * 1.00;
+      const pass = Math.abs(r100.annualCommission - expected) < 0.01;
+      console.log(`[Self-Test] Emily@100%: ${r100.annualCommission.toFixed(2)} (expected ~${expected.toFixed(2)}) ${pass ? 'PASS' : 'FAIL'}`);
+
+      const dash = teams[1].members[2];
+      const rd = calcCommission(dash, 1.00, quarterlyWeights);
+      const expDash = 2023556 * 0.012 * 1.00;
+      const pass2 = Math.abs(rd.annualCommission - expDash) < 0.01;
+      console.log(`[Self-Test] Dash@100%: ${rd.annualCommission.toFixed(2)} (expected ~${expDash.toFixed(2)}) ${pass2 ? 'PASS' : 'FAIL'}`);
+
+      const m80 = getMultiplier(0.80);
+      console.log(`[Self-Test] Multiplier@80%: ${m80} (expected 0.80) ${m80 === 0.80 ? 'PASS' : 'FAIL'}`);
+      const m90 = getMultiplier(0.90);
+      console.log(`[Self-Test] Multiplier@90%: ${m90} (expected 0.90) ${m90 === 0.90 ? 'PASS' : 'FAIL'}`);
+      const m105 = getMultiplier(1.05);
+      console.log(`[Self-Test] Multiplier@105%: ${m105} (expected 1.10) ${m105 === 1.10 ? 'PASS' : 'FAIL'}`);
+      const m120 = getMultiplier(1.20);
+      console.log(`[Self-Test] Multiplier@120%: ${m120} (expected 1.20) ${m120 === 1.20 ? 'PASS' : 'FAIL'}`);
+    }
+
+    return {
+      authenticated, passwordInput, loginError, doLogin,
+      lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
+      t, fmtCurrency, fmtPct, calcResult, customResult,
+      teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
+      weightWarning, scenarioClass,
+      saveToFile, loadFromFile, resetDefaults,
+    };
+  }
+});
+
+app.mount('#app');
+</script>
+</body>
+</html>
