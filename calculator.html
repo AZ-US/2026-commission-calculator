@@ -738,6 +738,50 @@ tr:hover td { background: #f8f9fa; }
         </div>
       </div>
 
+      <!-- Contributor Revenue (informational, not in team commission calc) -->
+      <div class="card" v-if="contributorMembers.length > 0">
+        <div class="card-title">🤝 {{ t('贡献者收入（仅记录·已含在 Account 总额内）', 'Contributor Revenue (Informational · included in Account total)') }}</div>
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">
+          {{ t('这些同事维护特定客户但无提成方案，他们的收入已计入 Emily 输入的 Account 总收入，此处仅用于可见性。', 'These members maintain specific accounts without a commission plan. Their revenue is already part of Emily\'s Account total — shown here for visibility only.') }}
+        </p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('姓名 / 负责客户', 'Name / Accounts') }}</th>
+                <th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th>
+                <th>{{ t('YTD 贡献', 'YTD Contribution') }}</th>
+                <th style="min-width:180px">{{ t('备注', 'Notes') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in contributorMembers" :key="'contrib-'+m.id">
+                <td>
+                  <strong>{{ m.name }}</strong>
+                  <div style="font-size:11px;color:var(--text-secondary)">{{ lang==='zh'?m.titleZh:m.titleEn }}</div>
+                </td>
+                <td v-for="qi in 4" :key="qi" :style="contributorQActual(m, qi-1) > 0 ? 'background:#f1f8f1;font-weight:600' : ''">
+                  {{ contributorQActual(m, qi-1) > 0 ? fmtCurrency(contributorQActual(m, qi-1)) : '—' }}
+                </td>
+                <td style="font-weight:700;color:#1a73e8">{{ fmtCurrency(contributorYTD(m)) }}</td>
+                <td>
+                  <input type="text" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px"
+                         :placeholder="t('备注…', 'Notes…')"
+                         :value="m.quarterlyNotes?.[0] || ''"
+                         @input="m.quarterlyNotes && (m.quarterlyNotes[0] = $event.target.value)">
+                </td>
+              </tr>
+              <tr v-if="contributorMembers.length > 1" style="font-weight:700;border-top:2px solid #1a73e8;background:#f8f9fa">
+                <td>{{ t('合计', 'Total') }}</td>
+                <td colspan="4"></td>
+                <td style="color:#1a73e8">{{ fmtCurrency(contributorsTotalYTD) }}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- YTD Real-Time Tracking -->
       <div class="card" v-if="ytdActualRevenue > 0 || ytdBdActual > 0">
         <div class="card-title">🎯 {{ t('YTD 实时追踪 Real-Time Tracking', 'YTD Real-Time Tracking') }}</div>
@@ -1048,6 +1092,7 @@ function defaultTeams() {
         { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, ref2025Commission: 6000, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
         { id: 'nancy', name: 'Nancy (TBD)', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 120000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 20516, quarterlyActual: [0,0,0,0] },
         { id: 'justin', name: 'Justin', titleZh: '客户经理', titleEn: 'Account Mgr', role: 'individual', baseSalary: 75000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 21129, quarterlyActual: [0,0,0,0] },
+        { id: 'robert', name: 'Robert (TBD)', titleZh: '副总裁 · B&H 客户', titleEn: 'VP · B&H Accounts', role: 'contributor', baseSalary: 160000, rate: 0, revenueTarget: 0, ref2025Commission: 29664, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
       ]
     },
     {
@@ -1056,7 +1101,6 @@ function defaultTeams() {
         { id: 'jonathan', name: 'Jonathan', titleZh: 'BD总监', titleEn: 'BD Director', role: 'director', baseSalary: 165000, rate: 0.0065, revenueTarget: 6323613, ref2025Commission: 24778, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
         { id: 'daniel', name: 'Daniel', titleZh: 'BD经理', titleEn: 'BD Manager', role: 'individual', baseSalary: 125000, rate: 0.008, revenueTarget: 3794168, ref2025Commission: 10114, quarterlyActual: [0,0,0,0] },
         { id: 'dash', name: 'Dash', titleZh: 'BD专员', titleEn: 'BD Specialist', role: 'individual', baseSalary: 96000, rate: 0.01, revenueTarget: 2529445, ref2025Commission: 15486, quarterlyActual: [0,0,0,0] },
-        { id: 'robert', name: 'Robert (TBD)', titleZh: 'BD副总裁', titleEn: 'BD VP', role: 'individual', baseSalary: 160000, rate: 0, revenueTarget: 0, ref2025Commission: 29664, quarterlyActual: [0,0,0,0] },
       ]
     }
   ];
@@ -1224,6 +1268,17 @@ const app = createApp({
     // Per-member actual YTD helper for template
     function memberActualYTD(m) { return calcActualYTD(m, quarterlyWeights); }
     function memberActualQ(m, qi) { return calcActualQuarter(m, qi, quarterlyWeights); }
+
+    // Contributor members (role: 'contributor' — e.g. Robert, B&H maintenance, no commission)
+    // Their revenue is informational only — already counted in Emily's Account total.
+    const contributorMembers = computed(() =>
+      teams.flatMap(t => t.members).filter(m => m.role === 'contributor')
+    );
+    function contributorQActual(m, qi) { return (m.quarterlyActual || [])[qi] || 0; }
+    function contributorYTD(m) { return [0,1,2,3].reduce((s, qi) => s + contributorQActual(m, qi), 0); }
+    const contributorsTotalYTD = computed(() =>
+      contributorMembers.value.reduce((s, m) => s + contributorYTD(m), 0)
+    );
 
 
     const weightWarning = computed(() => {
@@ -1759,6 +1814,7 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       accountTeamCommQ, bdTeamCommQ, allCommissionQ,
       memberCommQ, memberCommYTD,
       cloudStatus, isEditorMode, reloadFromCloud,
+      contributorMembers, contributorQActual, contributorYTD, contributorsTotalYTD,
     };
   }
 });
