@@ -738,14 +738,49 @@ tr:hover td { background: #f8f9fa; }
         </div>
       </div>
 
+      <!-- YTD Real-Time Tracking -->
+      <div class="card" v-if="ytdActualRevenue > 0 || ytdBdActual > 0">
+        <div class="card-title">🎯 {{ t('YTD 实时追踪 Real-Time Tracking', 'YTD Real-Time Tracking') }}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:12px">
+          <!-- Account team progress -->
+          <div style="padding:14px;background:#f8fbff;border-left:4px solid #1a73e8;border-radius:6px">
+            <div style="font-size:12px;color:#5f6368;margin-bottom:4px">🏢 {{ t('Account 团队完成率', 'Account Team Attainment') }}</div>
+            <div style="font-size:28px;font-weight:700;color:#1a73e8">{{ fmtPct(ytdAttainment) }}</div>
+            <div style="font-size:12px;color:#5f6368;margin-top:2px">{{ fmtCurrency(ytdActualRevenue) }} / {{ fmtCurrency(grandAnnualTarget) }}</div>
+            <div style="height:6px;background:#e8eaed;border-radius:3px;margin-top:8px;overflow:hidden">
+              <div :style="`height:100%;width:${Math.min(100, ytdAttainment*100)}%;background:${ytdAttainment>=1?'#34a853':ytdAttainment>=0.86?'#fbbc04':'#ea4335'};transition:width 0.3s`"></div>
+            </div>
+          </div>
+          <!-- BD team progress -->
+          <div style="padding:14px;background:#fff8f0;border-left:4px solid #e67700;border-radius:6px">
+            <div style="font-size:12px;color:#5f6368;margin-bottom:4px">📌 {{ t('BD 团队完成率', 'BD Team Attainment') }}</div>
+            <div style="font-size:28px;font-weight:700;color:#e67700">{{ bdAnnualTarget > 0 ? fmtPct(ytdBdActual / bdAnnualTarget) : '—' }}</div>
+            <div style="font-size:12px;color:#5f6368;margin-top:2px">{{ fmtCurrency(ytdBdActual) }} / {{ fmtCurrency(bdAnnualTarget) }}</div>
+            <div style="height:6px;background:#e8eaed;border-radius:3px;margin-top:8px;overflow:hidden">
+              <div :style="`height:100%;width:${Math.min(100, bdAnnualTarget>0?(ytdBdActual/bdAnnualTarget)*100:0)}%;background:${bdAnnualTarget>0&&ytdBdActual/bdAnnualTarget>=1?'#34a853':bdAnnualTarget>0&&ytdBdActual/bdAnnualTarget>=0.86?'#fbbc04':'#ea4335'};transition:width 0.3s`"></div>
+            </div>
+          </div>
+          <!-- Total YTD commission -->
+          <div style="padding:14px;background:#f1f8f1;border-left:4px solid #0d904f;border-radius:6px">
+            <div style="font-size:12px;color:#5f6368;margin-bottom:4px">💰 {{ t('全员 YTD 实际提成', 'Total YTD Commission') }}</div>
+            <div style="font-size:28px;font-weight:700;color:#0d904f">{{ fmtCurrency(ytdActualCommission) }}</div>
+            <div style="font-size:12px;color:#5f6368;margin-top:2px">
+              Account {{ fmtCurrency(ytdAccountTeamComm) }} · BD {{ fmtCurrency(ytdBdTeamComm) }}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Charts -->
       <div class="card">
         <div class="card-title">{{ t('可视化仪表盘 Visual Dashboard', 'Visual Dashboard') }}</div>
         <div class="chart-grid">
+          <div><canvas id="chartQuarterlyRev"></canvas></div>
+          <div><canvas id="chartMemberYTD"></canvas></div>
           <div><canvas id="chartScenario"></canvas></div>
+          <div><canvas id="chartQuarterly"></canvas></div>
           <div><canvas id="chartTeamPie"></canvas></div>
           <div><canvas id="chartTCC"></canvas></div>
-          <div><canvas id="chartQuarterly"></canvas></div>
         </div>
       </div>
 
@@ -1393,22 +1428,31 @@ const app = createApp({
         Object.values(charts).forEach(c => c.destroy());
         charts = {};
 
-        // 1. Scenario comparison bar chart
+        // 1. Scenario comparison bar chart (+ Actual YTD overlay)
         const ctx1 = document.getElementById('chartScenario');
         if (ctx1) {
+          const hasActual = allMembers.some(m => memberCommYTD(m) > 0);
+          const datasets = scenarios.map((s, si) => ({
+            label: lang.value === 'zh' ? s.labelZh : s.labelEn,
+            data: allMembers.map(m => calcResult(m, si).annualCommission),
+            backgroundColor: colors[si],
+            borderColor: borderColors[si],
+            borderWidth: 1
+          }));
+          if (hasActual) {
+            datasets.push({
+              label: lang.value === 'zh' ? 'YTD 实际' : 'YTD Actual',
+              data: allMembers.map(m => memberCommYTD(m)),
+              backgroundColor: '#0d904f',
+              borderColor: '#0d904f',
+              borderWidth: 2,
+              type: 'bar'
+            });
+          }
           charts.scenario = new Chart(ctx1, {
             type: 'bar',
-            data: {
-              labels: names,
-              datasets: scenarios.map((s, si) => ({
-                label: lang.value === 'zh' ? s.labelZh : s.labelEn,
-                data: allMembers.map(m => calcResult(m, si).annualCommission),
-                backgroundColor: colors[si],
-                borderColor: borderColors[si],
-                borderWidth: 1
-              }))
-            },
-            options: { responsive: true, plugins: { title: { display: true, text: lang.value === 'zh' ? '各场景年度提成对比' : 'Annual Commission by Scenario' }}, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
+            data: { labels: names, datasets },
+            options: { responsive: true, plugins: { title: { display: true, text: lang.value === 'zh' ? '场景对比 + YTD 实际' : 'Scenarios + YTD Actual' }}, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
           });
         }
 
@@ -1443,20 +1487,59 @@ const app = createApp({
           });
         }
 
-        // 4. Quarterly breakdown (100% scenario)
+        // 4. Quarterly commission: Target (100%) vs Actual
         const ctx4 = document.getElementById('chartQuarterly');
         if (ctx4) {
+          const qLabels = ['Q1','Q2','Q3','Q4'];
+          const targetByQ = [0,1,2,3].map(qi =>
+            allMembers.reduce((s, m) => s + calcResult(m, 1).quarterly[qi], 0)
+          );
+          const actualByQ = [0,1,2,3].map(qi => allCommissionQ(qi));
           charts.quarterly = new Chart(ctx4, {
             type: 'bar',
             data: {
-              labels: ['Q1 (22.32%)', 'Q2 (27.50%)', 'Q3 (21.69%)', 'Q4 (28.48%)'],
-              datasets: allMembers.filter(m => m.rate > 0).map((m, i) => ({
-                label: m.name,
-                data: calcResult(m, 1).quarterly,
-                backgroundColor: ['#4285f4','#34a853','#fbbc04','#ea4335','#ff6d01','#46bdc6','#9334e6'][i % 7],
-              }))
+              labels: qLabels,
+              datasets: [
+                { label: lang.value==='zh'?'季度目标提成 (100%)':'Target Commission (100%)', data: targetByQ, backgroundColor: '#e8f0fe', borderColor: '#1a73e8', borderWidth: 1 },
+                { label: lang.value==='zh'?'实际提成':'Actual Commission', data: actualByQ, backgroundColor: '#0d904f', borderColor: '#0d904f', borderWidth: 1 }
+              ]
             },
-            options: { responsive: true, plugins: { title: { display: true, text: lang.value === 'zh' ? '季度提成分布 (100% 目标)' : 'Quarterly Commission (100%)' }}, scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
+            options: { responsive: true, plugins: { title: { display: true, text: lang.value === 'zh' ? '季度提成：目标 vs 实际' : 'Quarterly Commission: Target vs Actual' }}, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
+          });
+        }
+
+        // 5. Quarterly Revenue: Target vs Actual (Account + BD)
+        const ctx5 = document.getElementById('chartQuarterlyRev');
+        if (ctx5) {
+          charts.qrev = new Chart(ctx5, {
+            type: 'bar',
+            data: {
+              labels: ['Q1','Q2','Q3','Q4'],
+              datasets: [
+                { label: lang.value==='zh'?'Account 目标':'Account Target', data: [0,1,2,3].map(qi => accountQTarget(qi)), backgroundColor: '#e8f0fe', borderColor: '#1a73e8', borderWidth: 1 },
+                { label: lang.value==='zh'?'Account 实际':'Account Actual', data: [0,1,2,3].map(qi => accountQActual(qi)), backgroundColor: '#1a73e8', borderColor: '#1a73e8', borderWidth: 1 },
+                { label: lang.value==='zh'?'BD 目标':'BD Target', data: [0,1,2,3].map(qi => bdQTarget(qi)), backgroundColor: '#fff3e0', borderColor: '#e67700', borderWidth: 1 },
+                { label: lang.value==='zh'?'BD 实际':'BD Actual', data: [0,1,2,3].map(qi => bdQActual(qi)), backgroundColor: '#e67700', borderColor: '#e67700', borderWidth: 1 }
+              ]
+            },
+            options: { responsive: true, plugins: { title: { display: true, text: lang.value === 'zh' ? '季度收入：目标 vs 实际' : 'Quarterly Revenue: Target vs Actual' }}, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + (v/1e6).toFixed(1) + 'M' }}}}
+          });
+        }
+
+        // 6. Per-member YTD commission vs 100% annual target
+        const ctx6 = document.getElementById('chartMemberYTD');
+        if (ctx6) {
+          const activeMembers = allMembers.filter(m => m.rate > 0);
+          charts.memberYTD = new Chart(ctx6, {
+            type: 'bar',
+            data: {
+              labels: activeMembers.map(m => m.name),
+              datasets: [
+                { label: lang.value==='zh'?'年度目标提成 (100%)':'Annual Target (100%)', data: activeMembers.map(m => calcResult(m, 1).annualCommission), backgroundColor: '#e8f0fe', borderColor: '#1a73e8', borderWidth: 1 },
+                { label: lang.value==='zh'?'YTD 实际提成':'YTD Actual', data: activeMembers.map(m => memberCommYTD(m)), backgroundColor: '#0d904f', borderColor: '#0d904f', borderWidth: 1 }
+              ]
+            },
+            options: { indexAxis: 'y', responsive: true, plugins: { title: { display: true, text: lang.value === 'zh' ? '个人提成：YTD 实际 vs 年度目标' : 'Per-Member: YTD Actual vs Annual Target' }}, scales: { x: { beginAtZero: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
           });
         }
       }, 100);
