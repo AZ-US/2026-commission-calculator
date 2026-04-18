@@ -494,17 +494,21 @@ tr:hover td { background: #f8f9fa; }
               <tr>
                 <th>{{ t('季度', 'Quarter') }}</th>
                 <th>{{ t('季度目标', 'Q Target') }}</th>
-                <th style="background:#e8f5e9">{{ t('Emily 输入的实际收入', 'Actual Revenue (Emily)') }}</th>
+                <th style="background:#e8f5e9">{{ t('Emily 录入', 'Emily Input') }}</th>
+                <th style="background:#fff8e1">{{ t('贡献者 (Robert)', 'Contributor (Robert)') }}</th>
+                <th style="background:#e3f2fd">{{ t('Account 合计', 'Account Total') }}</th>
                 <th>{{ t('完成率', 'Attainment') }}</th>
-                <th>{{ t('Account 团队提成小计', 'Account Team Commission') }}</th>
-                <th style="min-width:200px">{{ t('数据来源 / 备注', 'Source / Notes') }}</th>
+                <th>{{ t('Account 团队提成', 'Account Team Commission') }}</th>
+                <th style="min-width:180px">{{ t('备注', 'Notes') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="qi in 4" :key="'acct'+qi">
                 <td><strong>Q{{ qi }}</strong></td>
                 <td>{{ fmtCurrency(accountQTarget(qi-1)) }}</td>
-                <td style="background:#f1f8f1">{{ fmtCurrency(accountQActual(qi-1)) }}</td>
+                <td style="background:#f1f8f1">{{ accountQActualEmily(qi-1) > 0 ? fmtCurrency(accountQActualEmily(qi-1)) : '—' }}</td>
+                <td style="background:#fffde7">{{ accountQActualContributors(qi-1) > 0 ? fmtCurrency(accountQActualContributors(qi-1)) : '—' }}</td>
+                <td style="background:#e3f2fd;font-weight:700">{{ fmtCurrency(accountQActual(qi-1)) }}</td>
                 <td>
                   <span v-if="accountQActual(qi-1) > 0"
                         :style="accountQAttainment(qi-1) >= 1 ? 'color:#34a853;font-weight:600' : accountQAttainment(qi-1) >= 0.86 ? 'color:#fbbc04;font-weight:600' : 'color:#ea4335;font-weight:600'">
@@ -528,7 +532,9 @@ tr:hover td { background: #f8f9fa; }
               <tr style="font-weight:700;border-top:2px solid var(--primary);background:#f8f9fa">
                 <td>{{ t('全年合计', 'Annual Total') }}</td>
                 <td>{{ fmtCurrency(grandAnnualTarget) }}</td>
-                <td style="background:#e8f5e9">{{ fmtCurrency(ytdActualRevenue) }}</td>
+                <td style="background:#e8f5e9">{{ fmtCurrency([0,1,2,3].reduce((s,qi)=>s+accountQActualEmily(qi),0)) }}</td>
+                <td style="background:#fffde7">{{ fmtCurrency(contributorsTotalYTD) }}</td>
+                <td style="background:#e3f2fd">{{ fmtCurrency(ytdActualRevenue) }}</td>
                 <td :style="ytdAttainment >= 1 ? 'color:#34a853' : ytdAttainment >= 0.86 ? 'color:#fbbc04' : ytdActualRevenue > 0 ? 'color:#ea4335' : ''">
                   {{ ytdActualRevenue > 0 ? fmtPct(ytdAttainment) : '—' }}
                 </td>
@@ -738,11 +744,11 @@ tr:hover td { background: #f8f9fa; }
         </div>
       </div>
 
-      <!-- Contributor Revenue (informational, not in team commission calc) -->
+      <!-- Contributor Revenue (adds to Account team attainment, but earns no commission) -->
       <div class="card" v-if="contributorMembers.length > 0">
-        <div class="card-title">🤝 {{ t('贡献者收入（仅记录·已含在 Account 总额内）', 'Contributor Revenue (Informational · included in Account total)') }}</div>
+        <div class="card-title">🤝 {{ t('贡献者收入（计入 Account 完成率，不发提成）', 'Contributor Revenue (Counts toward Account attainment · no commission)') }}</div>
         <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">
-          {{ t('这些同事维护特定客户但无提成方案，他们的收入已计入 Emily 输入的 Account 总收入，此处仅用于可见性。', 'These members maintain specific accounts without a commission plan. Their revenue is already part of Emily\'s Account total — shown here for visibility only.') }}
+          {{ t('这些同事维护特定客户但没有提成方案。他们的实际收入会自动加到 Account 团队总完成率里，但他们本人不发提成。', 'These members maintain specific accounts but have no commission plan. Their revenue is added to the Account team attainment, but they themselves earn no commission.') }}
         </p>
         <div style="overflow-x:auto">
           <table>
@@ -1235,7 +1241,13 @@ const app = createApp({
     // Company (Account) revenue helpers — Emily is the source of truth
     const grandAnnualTarget = computed(() => accountDirector.value?.revenueTarget || 0);
     function accountQTarget(qi) { return (accountDirector.value?.revenueTarget || 0) * quarterlyWeights[qi]; }
-    function accountQActual(qi) { return (accountDirector.value?.quarterlyActual || [])[qi] || 0; }
+    function accountQActualEmily(qi) { return (accountDirector.value?.quarterlyActual || [])[qi] || 0; }
+    function accountQActualContributors(qi) {
+      return teams.flatMap(t => t.members)
+        .filter(m => m.role === 'contributor')
+        .reduce((s, m) => s + ((m.quarterlyActual || [])[qi] || 0), 0);
+    }
+    function accountQActual(qi) { return accountQActualEmily(qi) + accountQActualContributors(qi); }
     function accountQAttainment(qi) { const t = accountQTarget(qi); return t > 0 ? accountQActual(qi) / t : 0; }
     const ytdActualRevenue = computed(() => [0,1,2,3].reduce((s, qi) => s + accountQActual(qi), 0));
     const ytdAttainment    = computed(() => grandAnnualTarget.value > 0 ? ytdActualRevenue.value / grandAnnualTarget.value : 0);
@@ -1815,6 +1827,7 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       memberCommQ, memberCommYTD,
       cloudStatus, isEditorMode, reloadFromCloud,
       contributorMembers, contributorQActual, contributorYTD, contributorsTotalYTD,
+      accountQActualEmily, accountQActualContributors,
     };
   }
 });
