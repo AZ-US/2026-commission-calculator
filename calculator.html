@@ -435,6 +435,7 @@ tr:hover td { background: #f8f9fa; }
                 <th style="background:#e8f5e9">{{ t('Emily 输入的实际收入', 'Actual Revenue (Emily)') }}</th>
                 <th>{{ t('完成率', 'Attainment') }}</th>
                 <th>{{ t('Account 团队提成小计', 'Account Team Commission') }}</th>
+                <th style="min-width:200px">{{ t('数据来源 / 备注', 'Source / Notes') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -450,6 +451,17 @@ tr:hover td { background: #f8f9fa; }
                   <span v-else style="color:var(--text-secondary)">—</span>
                 </td>
                 <td style="font-weight:700">{{ fmtCurrency(accountTeamCommQ(qi-1)) }}</td>
+                <td>
+                  <input type="text" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;color:#333"
+                         :placeholder="t('粘贴链接或输入备注…', 'Paste URL or notes…')"
+                         :value="accountDirector?.quarterlyNotes?.[qi-1] || ''"
+                         @input="if(accountDirector) accountDirector.quarterlyNotes[qi-1] = $event.target.value">
+                  <a v-if="accountDirector?.quarterlyNotes?.[qi-1]?.startsWith('http')"
+                     :href="accountDirector.quarterlyNotes[qi-1]" target="_blank"
+                     style="font-size:11px;color:#1a73e8;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">
+                    🔗 {{ t('打开链接', 'Open link') }}
+                  </a>
+                </td>
               </tr>
               <tr style="font-weight:700;border-top:2px solid var(--primary);background:#f8f9fa">
                 <td>{{ t('全年合计', 'Annual Total') }}</td>
@@ -459,6 +471,7 @@ tr:hover td { background: #f8f9fa; }
                   {{ ytdActualRevenue > 0 ? fmtPct(ytdAttainment) : '—' }}
                 </td>
                 <td style="font-weight:700;color:var(--primary)">{{ fmtCurrency(ytdAccountTeamComm) }}</td>
+                <td></td>
               </tr>
             </tbody>
           </table>
@@ -478,6 +491,7 @@ tr:hover td { background: #f8f9fa; }
                 <th>{{ t('BD 完成率', 'BD Attainment') }}</th>
                 <th>{{ t('BD 占 Account %', 'BD % of Account') }}</th>
                 <th>{{ t('BD 团队提成小计', 'BD Team Commission') }}</th>
+                <th style="min-width:200px">{{ t('数据来源 / 备注', 'Source / Notes') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -496,6 +510,17 @@ tr:hover td { background: #f8f9fa; }
                   {{ accountQActual(qi-1) > 0 ? fmtPct(bdQActual(qi-1) / accountQActual(qi-1)) : '—' }}
                 </td>
                 <td style="font-weight:700">{{ fmtCurrency(bdTeamCommQ(qi-1)) }}</td>
+                <td>
+                  <input type="text" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;color:#333"
+                         :placeholder="t('粘贴链接或输入备注…', 'Paste URL or notes…')"
+                         :value="bdDirector?.quarterlyNotes?.[qi-1] || ''"
+                         @input="if(bdDirector) bdDirector.quarterlyNotes[qi-1] = $event.target.value">
+                  <a v-if="bdDirector?.quarterlyNotes?.[qi-1]?.startsWith('http')"
+                     :href="bdDirector.quarterlyNotes[qi-1]" target="_blank"
+                     style="font-size:11px;color:#1a73e8;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">
+                    🔗 {{ t('打开链接', 'Open link') }}
+                  </a>
+                </td>
               </tr>
               <tr style="font-weight:700;border-top:2px solid #e67700;background:#fffaf5">
                 <td>{{ t('全年合计', 'Annual Total') }}</td>
@@ -508,6 +533,7 @@ tr:hover td { background: #f8f9fa; }
                   {{ ytdActualRevenue > 0 ? fmtPct(ytdBdActual/ytdActualRevenue) : '—' }}
                 </td>
                 <td style="font-weight:700;color:#e67700">{{ fmtCurrency(ytdBdTeamComm) }}</td>
+                <td></td>
               </tr>
             </tbody>
           </table>
@@ -922,7 +948,7 @@ function defaultTeams() {
     {
       key: 'account', nameZh: '客户团队', nameEn: 'Account Team',
       members: [
-        { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, ref2025Commission: 6000, quarterlyActual: [0,0,0,0] },
+        { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, ref2025Commission: 6000, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
         { id: 'nancy', name: 'Nancy (TBD)', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 120000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 20516, quarterlyActual: [0,0,0,0] },
         { id: 'justin', name: 'Justin', titleZh: '客户经理', titleEn: 'Account Mgr', role: 'individual', baseSalary: 75000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 21129, quarterlyActual: [0,0,0,0] },
       ]
@@ -930,7 +956,7 @@ function defaultTeams() {
     {
       key: 'bd', nameZh: 'BD团队', nameEn: 'BD Team',
       members: [
-        { id: 'jonathan', name: 'Jonathan', titleZh: 'BD总监', titleEn: 'BD Director', role: 'director', baseSalary: 165000, rate: 0.0065, revenueTarget: 6323613, ref2025Commission: 24778, quarterlyActual: [0,0,0,0] },
+        { id: 'jonathan', name: 'Jonathan', titleZh: 'BD总监', titleEn: 'BD Director', role: 'director', baseSalary: 165000, rate: 0.0065, revenueTarget: 6323613, ref2025Commission: 24778, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
         { id: 'daniel', name: 'Daniel', titleZh: 'BD经理', titleEn: 'BD Manager', role: 'individual', baseSalary: 125000, rate: 0.008, revenueTarget: 3794168, ref2025Commission: 10114, quarterlyActual: [0,0,0,0] },
         { id: 'dash', name: 'Dash', titleZh: 'BD专员', titleEn: 'BD Specialist', role: 'individual', baseSalary: 96000, rate: 0.01, revenueTarget: 2529445, ref2025Commission: 15486, quarterlyActual: [0,0,0,0] },
         { id: 'robert', name: 'Robert (TBD)', titleZh: 'BD副总裁', titleEn: 'BD VP', role: 'individual', baseSalary: 160000, rate: 0, revenueTarget: 0, ref2025Commission: 29664, quarterlyActual: [0,0,0,0] },
@@ -1138,6 +1164,10 @@ const app = createApp({
                 if (sm.quarterlyActual && Array.isArray(sm.quarterlyActual)) {
                   if (!target.quarterlyActual) target.quarterlyActual = [0,0,0,0];
                   sm.quarterlyActual.forEach((v, i) => { target.quarterlyActual[i] = v; });
+                }
+                if (sm.quarterlyNotes && Array.isArray(sm.quarterlyNotes)) {
+                  if (!target.quarterlyNotes) target.quarterlyNotes = ['','','',''];
+                  sm.quarterlyNotes.forEach((v, i) => { target.quarterlyNotes[i] = v; });
                 }
               }
             });
@@ -1518,6 +1548,7 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       exportMemberExcel, exportAllExcel,
       saveToFile, loadFromFile, resetDefaults,
       memberActualQ, memberActualYTD,
+      accountDirector, bdDirector,
       accountQTarget, accountQActual, accountQAttainment,
       bdQTarget, bdQActual, bdQAttainment,
       ytdActualRevenue, ytdAttainment, ytdBdActual, bdAnnualTarget,
