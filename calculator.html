@@ -370,6 +370,10 @@ tr:hover td { background: #f8f9fa; }
     <h1>{{ t('2026 提成计算器', '2026 Commission Calculator') }}</h1>
     <div class="header-actions">
       <button class="lang-toggle" @click="lang = lang === 'zh' ? 'en' : 'zh'">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
+      <button @click="undo" :disabled="!canUndo" :title="t('撤销 Ctrl+Z','Undo Ctrl+Z')"
+              :style="!canUndo ? 'opacity:0.35;cursor:not-allowed' : ''">↩ {{ t('撤销','Undo') }}</button>
+      <button @click="redo" :disabled="!canRedo" :title="t('恢复 Ctrl+Y','Redo Ctrl+Y')"
+              :style="!canRedo ? 'opacity:0.35;cursor:not-allowed' : ''">↪ {{ t('恢复','Redo') }}</button>
       <button @click="saveToFile">{{ t('备份', 'Backup') }}</button>
       <label>{{ t('导入', 'Import') }}<input type="file" class="hidden-input" accept=".json" @change="loadFromFile"></label>
       <button @click="exportAllExcel" style="background:#34a853;color:#fff;border-color:#34a853">{{ t('导出 Excel', 'Export Excel') }}</button>
@@ -1128,6 +1132,67 @@ const app = createApp({
     function memberActualYTD(m) { return calcActualYTD(m, quarterlyWeights); }
     function memberActualQ(m, qi) { return calcActualQuarter(m, qi, quarterlyWeights); }
 
+    // ── Undo / Redo ────────────────────────────────────────────────────────
+    const MAX_HISTORY = 50;
+    const historyStack = [];
+    const historyIndex = ref(-1);
+    let historyPaused = false;
+
+    function captureSnapshot() {
+      return JSON.stringify({ teams, scenarios, quarterlyWeights: [...quarterlyWeights], customAttainment: customAttainment.value });
+    }
+
+    function pushHistory() {
+      if (historyPaused) return;
+      const snap = captureSnapshot();
+      // Don't push duplicate
+      if (historyStack[historyIndex.value] === snap) return;
+      // Truncate redo branch
+      historyStack.splice(historyIndex.value + 1);
+      historyStack.push(snap);
+      if (historyStack.length > MAX_HISTORY) historyStack.shift();
+      historyIndex.value = historyStack.length - 1;
+    }
+
+    function applySnapshot(snap) {
+      historyPaused = true;
+      const state = JSON.parse(snap);
+      state.teams.forEach((st, ti) => {
+        if (!teams[ti]) return;
+        st.members.forEach((sm, mi) => {
+          const target = teams[ti].members[mi];
+          if (!target) return;
+          Object.assign(target, sm);
+          if (sm.quarterlyActual) sm.quarterlyActual.forEach((v, i) => { target.quarterlyActual[i] = v; });
+          if (sm.quarterlyNotes && target.quarterlyNotes) sm.quarterlyNotes.forEach((v, i) => { target.quarterlyNotes[i] = v; });
+        });
+      });
+      state.scenarios.forEach((s, i) => { if (scenarios[i]) Object.assign(scenarios[i], s); });
+      state.quarterlyWeights.forEach((v, i) => { quarterlyWeights[i] = v; });
+      customAttainment.value = state.customAttainment;
+      historyPaused = false;
+    }
+
+    const canUndo = computed(() => historyIndex.value > 0);
+    const canRedo = computed(() => historyIndex.value < historyStack.length - 1);
+
+    function undo() { if (!canUndo.value) return; historyIndex.value--; applySnapshot(historyStack[historyIndex.value]); }
+    function redo() { if (!canRedo.value) return; historyIndex.value++; applySnapshot(historyStack[historyIndex.value]); }
+
+    let historyDebounce;
+    watch([teams, scenarios, quarterlyWeights, customAttainment], () => {
+      if (historyPaused) return;
+      clearTimeout(historyDebounce);
+      historyDebounce = setTimeout(pushHistory, 800);
+    }, { deep: true });
+
+    function handleKeydown(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') { e.preventDefault(); undo(); }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); redo(); }
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     const weightWarning = computed(() => {
       const sum = quarterlyWeights.reduce((a, b) => a + b, 0);
       if (Math.abs(sum - 1) > 0.01) {
@@ -1229,6 +1294,10 @@ const app = createApp({
         if (saved) loadState(JSON.parse(saved));
       } catch(e) {}
       selfTest();
+      // Init history with current state
+      Vue.nextTick(() => pushHistory());
+      // Keyboard shortcuts
+      window.addEventListener('keydown', handleKeydown);
     });
 
     function selfTest() {
@@ -1546,6 +1615,7 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
       weightWarning, scenarioClass, exportEmployee,
       exportMemberExcel, exportAllExcel,
+      undo, redo, canUndo, canRedo,
       saveToFile, loadFromFile, resetDefaults,
       memberActualQ, memberActualYTD,
       accountDirector, bdDirector,
