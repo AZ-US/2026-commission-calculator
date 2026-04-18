@@ -410,6 +410,51 @@ tr:hover td { background: #f8f9fa; }
         <p v-if="weightWarning" class="weight-warning">{{ weightWarning }}</p>
       </div>
 
+      <!-- Quarterly Actual Summary -->
+      <div class="card">
+        <div class="card-title">📊 {{ t('季度实际完成汇总 Quarterly Actual Summary', 'Quarterly Actual Summary') }}</div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">
+          {{ t('汇总所有员工的实际完成情况（在各员工页面输入数据后自动更新）', 'Aggregates actual data entered in each employee tab') }}
+        </p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('季度', 'Quarter') }}</th>
+                <th>{{ t('合计目标', 'Team Target') }}</th>
+                <th style="background:#e8f5e9">{{ t('实际完成', 'Actual Revenue') }}</th>
+                <th>{{ t('完成率', 'Attainment') }}</th>
+                <th style="font-weight:700">{{ t('实际提成合计', 'Total Commission Earned') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="qi in 4" :key="'qsum'+qi">
+                <td><strong>Q{{ qi }}</strong></td>
+                <td>{{ fmtCurrency(qActualTarget(qi-1)) }}</td>
+                <td style="background:#f1f8f1">{{ fmtCurrency(qActualRevenue(qi-1)) }}</td>
+                <td>
+                  <span v-if="qActualTarget(qi-1) > 0"
+                        :style="qActualRevenue(qi-1)/qActualTarget(qi-1) >= 1 ? 'color:#34a853;font-weight:600' : qActualRevenue(qi-1)/qActualTarget(qi-1) >= 0.86 ? 'color:#fbbc04;font-weight:600' : 'color:#ea4335;font-weight:600'">
+                    {{ qActualRevenue(qi-1) > 0 ? fmtPct(qActualRevenue(qi-1)/qActualTarget(qi-1)) : '—' }}
+                  </span>
+                  <span v-else style="color:var(--text-secondary)">—</span>
+                </td>
+                <td style="font-weight:700">{{ fmtCurrency(qActualCommission(qi-1)) }}</td>
+              </tr>
+              <tr style="font-weight:700;border-top:2px solid var(--primary);background:#f8f9fa">
+                <td>{{ t('全年 YTD', 'YTD Total') }}</td>
+                <td>{{ fmtCurrency(grandAnnualTarget) }}</td>
+                <td style="background:#e8f5e9">{{ fmtCurrency(ytdActualRevenue) }}</td>
+                <td :style="grandAnnualTarget > 0 && ytdActualRevenue/grandAnnualTarget >= 1 ? 'color:#34a853' : 'color:#ea4335'">
+                  {{ ytdActualRevenue > 0 ? fmtPct(ytdActualRevenue/grandAnnualTarget) : '—' }}
+                </td>
+                <td style="font-weight:700;color:var(--primary)">{{ fmtCurrency(ytdActualCommission) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Team Scenario Comparison -->
       <div class="card" v-for="team in teams" :key="team.key">
         <div class="card-title">
@@ -631,6 +676,62 @@ tr:hover td { background: #f8f9fa; }
               </div>
             </div>
 
+            <!-- Actual Achievement Tracking -->
+            <div class="card" style="margin-top:20px">
+              <div class="card-title">📊 {{ t('实际完成追踪 Actual Achievement', 'Actual Achievement Tracker') }}</div>
+              <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">
+                {{ t('输入每季度实际完成收入，系统自动计算对应提成', 'Enter actual revenue per quarter to compute earned commission') }}
+              </p>
+              <div style="overflow-x:auto">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{{ t('季度', 'Quarter') }}</th>
+                      <th>{{ t('季度目标', 'Q Target') }}</th>
+                      <th style="background:#e8f5e9">{{ t('实际完成收入', 'Actual Revenue') }}</th>
+                      <th>{{ t('完成率', 'Attainment') }}</th>
+                      <th>{{ t('乘数', 'Multiplier') }}</th>
+                      <th style="font-weight:700">{{ t('实际提成', 'Earned Commission') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="qi in 4" :key="'act'+qi">
+                      <td><strong>Q{{ qi }}</strong> <span style="font-size:11px;color:var(--text-secondary)">({{ fmtPct(quarterlyWeights[qi-1]) }})</span></td>
+                      <td>{{ fmtCurrency(m.revenueTarget * quarterlyWeights[qi-1]) }}</td>
+                      <td style="background:#f1f8f1">
+                        <div style="display:flex;align-items:center;gap:4px">
+                          <span>$</span>
+                          <input class="editable-input" type="number" min="0" style="width:140px;background:#e8f5e9"
+                                 :value="m.quarterlyActual[qi-1]"
+                                 @input="m.quarterlyActual[qi-1] = parseFloat($event.target.value) || 0"
+                                 placeholder="0">
+                        </div>
+                      </td>
+                      <td>
+                        <span v-if="m.revenueTarget * quarterlyWeights[qi-1] > 0"
+                              :style="memberActualQ(m,qi-1).attainment >= 1 ? 'color:#34a853;font-weight:600' : memberActualQ(m,qi-1).attainment >= 0.86 ? 'color:#fbbc04;font-weight:600' : 'color:#ea4335;font-weight:600'">
+                          {{ fmtPct(memberActualQ(m,qi-1).attainment) }}
+                        </span>
+                        <span v-else style="color:var(--text-secondary)">—</span>
+                      </td>
+                      <td>×{{ memberActualQ(m,qi-1).multiplier.toFixed(2) }}</td>
+                      <td style="font-weight:700">{{ fmtCurrency(memberActualQ(m,qi-1).commission) }}</td>
+                    </tr>
+                    <tr style="font-weight:700;border-top:2px solid var(--primary);background:#f8f9fa">
+                      <td>{{ t('累计 YTD', 'YTD Total') }}</td>
+                      <td>{{ fmtCurrency(m.revenueTarget) }}</td>
+                      <td style="background:#e8f5e9">{{ fmtCurrency(memberActualYTD(m).totalActual) }}</td>
+                      <td :style="memberActualYTD(m).ytdAttainment >= 1 ? 'color:#34a853' : memberActualYTD(m).ytdAttainment >= 0.86 ? 'color:#fbbc04' : 'color:#ea4335'">
+                        {{ m.revenueTarget > 0 ? fmtPct(memberActualYTD(m).ytdAttainment) : '—' }}
+                      </td>
+                      <td>—</td>
+                      <td style="font-weight:700;color:var(--primary)">{{ fmtCurrency(memberActualYTD(m).totalCommission) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <!-- Custom Scenario -->
             <div class="custom-scenario">
               <h3>{{ t('自定义场景模拟 What-If Scenario', 'What-If Scenario') }}</h3>
@@ -707,18 +808,18 @@ function defaultTeams() {
     {
       key: 'account', nameZh: '客户团队', nameEn: 'Account Team',
       members: [
-        { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, ref2025Commission: 6000 },
-        { id: 'nancy', name: 'Nancy (TBD)', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 120000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 20516 },
-        { id: 'justin', name: 'Justin', titleZh: '客户经理', titleEn: 'Account Mgr', role: 'individual', baseSalary: 75000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 21129 },
+        { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, ref2025Commission: 6000, quarterlyActual: [0,0,0,0] },
+        { id: 'nancy', name: 'Nancy (TBD)', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 120000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 20516, quarterlyActual: [0,0,0,0] },
+        { id: 'justin', name: 'Justin', titleZh: '客户经理', titleEn: 'Account Mgr', role: 'individual', baseSalary: 75000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 21129, quarterlyActual: [0,0,0,0] },
       ]
     },
     {
       key: 'bd', nameZh: 'BD团队', nameEn: 'BD Team',
       members: [
-        { id: 'jonathan', name: 'Jonathan', titleZh: 'BD总监', titleEn: 'BD Director', role: 'director', baseSalary: 165000, rate: 0.0065, revenueTarget: 6323613, ref2025Commission: 24778 },
-        { id: 'daniel', name: 'Daniel', titleZh: 'BD经理', titleEn: 'BD Manager', role: 'individual', baseSalary: 125000, rate: 0.008, revenueTarget: 3794168, ref2025Commission: 10114 },
-        { id: 'dash', name: 'Dash', titleZh: 'BD专员', titleEn: 'BD Specialist', role: 'individual', baseSalary: 96000, rate: 0.01, revenueTarget: 2529445, ref2025Commission: 15486 },
-        { id: 'robert', name: 'Robert (TBD)', titleZh: 'BD副总裁', titleEn: 'BD VP', role: 'individual', baseSalary: 160000, rate: 0, revenueTarget: 0, ref2025Commission: 29664 },
+        { id: 'jonathan', name: 'Jonathan', titleZh: 'BD总监', titleEn: 'BD Director', role: 'director', baseSalary: 165000, rate: 0.0065, revenueTarget: 6323613, ref2025Commission: 24778, quarterlyActual: [0,0,0,0] },
+        { id: 'daniel', name: 'Daniel', titleZh: 'BD经理', titleEn: 'BD Manager', role: 'individual', baseSalary: 125000, rate: 0.008, revenueTarget: 3794168, ref2025Commission: 10114, quarterlyActual: [0,0,0,0] },
+        { id: 'dash', name: 'Dash', titleZh: 'BD专员', titleEn: 'BD Specialist', role: 'individual', baseSalary: 96000, rate: 0.01, revenueTarget: 2529445, ref2025Commission: 15486, quarterlyActual: [0,0,0,0] },
+        { id: 'robert', name: 'Robert (TBD)', titleZh: 'BD副总裁', titleEn: 'BD VP', role: 'individual', baseSalary: 160000, rate: 0, revenueTarget: 0, ref2025Commission: 29664, quarterlyActual: [0,0,0,0] },
       ]
     }
   ];
@@ -751,6 +852,28 @@ function calcCommission(member, attainment, weights) {
   const quarterly = weights.map(w => annualCommission * w);
   const tcc = member.baseSalary + annualCommission;
   return { multiplier, annualCommission, quarterly, tcc };
+}
+
+// Calculate actual commission for one quarter based on inputted actual revenue
+function calcActualQuarter(member, qi, weights) {
+  const qTarget = member.revenueTarget * weights[qi];
+  const actual = (member.quarterlyActual || [0,0,0,0])[qi] || 0;
+  const attainment = qTarget > 0 ? actual / qTarget : 0;
+  const multiplier = getMultiplier(attainment);
+  const commission = member.revenueTarget * member.rate * weights[qi] * multiplier;
+  return { attainment, multiplier, commission, actual, qTarget };
+}
+
+// YTD totals for one member
+function calcActualYTD(member, weights) {
+  let totalActual = 0, totalTarget = member.revenueTarget, totalCommission = 0;
+  for (let qi = 0; qi < 4; qi++) {
+    const r = calcActualQuarter(member, qi, weights);
+    totalActual += r.actual;
+    totalCommission += r.commission;
+  }
+  const ytdAttainment = totalTarget > 0 ? totalActual / totalTarget : 0;
+  return { totalActual, totalTarget, totalCommission, ytdAttainment };
 }
 
 const app = createApp({
@@ -814,6 +937,27 @@ const app = createApp({
       return teams.reduce((s, t) => s + teamCommTotal(t, si), 0);
     }
 
+    // All members flat list
+    const allMembers = computed(() => teams.flatMap(t => t.members));
+
+    // Actual quarter helpers for dashboard summary
+    function qActualTarget(qi) {
+      return allMembers.value.reduce((s, m) => s + m.revenueTarget * quarterlyWeights[qi], 0);
+    }
+    function qActualRevenue(qi) {
+      return allMembers.value.reduce((s, m) => s + ((m.quarterlyActual || [])[qi] || 0), 0);
+    }
+    function qActualCommission(qi) {
+      return allMembers.value.reduce((s, m) => s + calcActualQuarter(m, qi, quarterlyWeights).commission, 0);
+    }
+    const ytdActualRevenue = computed(() => [0,1,2,3].reduce((s, qi) => s + qActualRevenue(qi), 0));
+    const ytdActualCommission = computed(() => [0,1,2,3].reduce((s, qi) => s + qActualCommission(qi), 0));
+    const grandAnnualTarget = computed(() => allMembers.value.reduce((s, m) => s + m.revenueTarget, 0));
+
+    // Per-member actual YTD helper for template
+    function memberActualYTD(m) { return calcActualYTD(m, quarterlyWeights); }
+    function memberActualQ(m, qi) { return calcActualQuarter(m, qi, quarterlyWeights); }
+
     const weightWarning = computed(() => {
       const sum = quarterlyWeights.reduce((a, b) => a + b, 0);
       if (Math.abs(sum - 1) > 0.01) {
@@ -843,7 +987,15 @@ const app = createApp({
         state.teams.forEach((st, ti) => {
           if (teams[ti]) {
             st.members.forEach((sm, mi) => {
-              if (teams[ti].members[mi]) Object.assign(teams[ti].members[mi], sm);
+              if (teams[ti].members[mi]) {
+                const target = teams[ti].members[mi];
+                Object.assign(target, sm);
+                // Ensure quarterlyActual array stays reactive
+                if (sm.quarterlyActual && Array.isArray(sm.quarterlyActual)) {
+                  if (!target.quarterlyActual) target.quarterlyActual = [0,0,0,0];
+                  sm.quarterlyActual.forEach((v, i) => { target.quarterlyActual[i] = v; });
+                }
+              }
             });
           }
         });
@@ -1114,6 +1266,9 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
       weightWarning, scenarioClass, exportEmployee,
       saveToFile, loadFromFile, resetDefaults,
+      memberActualQ, memberActualYTD,
+      qActualTarget, qActualRevenue, qActualCommission,
+      ytdActualRevenue, ytdActualCommission, grandAnnualTarget,
     };
   }
 });
