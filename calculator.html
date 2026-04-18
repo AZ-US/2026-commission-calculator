@@ -687,8 +687,8 @@ tr:hover td { background: #f8f9fa; }
       <strong>{{ t('收入乘数规则 Revenue Multiplier Rules', 'Revenue Multiplier Rules') }}:</strong>
       <table style="margin-top:8px">
         <tr><th>{{ t('达成率', 'Attainment') }}</th><th>{{ t('乘数', 'Multiplier') }}</th></tr>
-        <tr><td>&lt;86%</td><td>×0.80</td></tr>
-        <tr><td>86%–99%</td><td>×{{ t('实际达成率', 'Actual %') }}</td></tr>
+        <tr><td>≤86%</td><td>×0.80</td></tr>
+        <tr><td>86%–99% ({{ t('高于', 'above') }} 86%)</td><td>×{{ t('实际达成率', 'Actual %') }}</td></tr>
         <tr><td>100%–104%</td><td>×1.00</td></tr>
         <tr><td>105%–119%</td><td>×1.10</td></tr>
         <tr><td>≥120%</td><td>×1.20 ({{ t('上限', 'cap') }})</td></tr>
@@ -738,7 +738,7 @@ function defaultWeights() {
 }
 
 function getMultiplier(attainment) {
-  if (attainment < 0.86) return 0.80;
+  if (attainment <= 0.86) return 0.80;
   if (attainment < 1.00) return attainment;
   if (attainment < 1.05) return 1.00;
   if (attainment < 1.20) return 1.10;
@@ -1095,7 +1095,7 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
         html += '</table>';
       });
 
-      html += `<div class="footer">${isZh ? '收入乘数规则' : 'Revenue Multiplier'}: &lt;86%→×0.80 | 86-99%→×actual | 100-104%→×1.00 | 105-119%→×1.10 | ≥120%→×1.20(cap)<br>${isZh ? '结算周期：季末后30天内发放' : 'Settlement: within 30 days after quarter-end'}</div></body></html>`;
+      html += `<div class="footer">${isZh ? '收入乘数规则' : 'Revenue Multiplier'}: ≤86%→×0.80 | 86-99%→×actual | 100-104%→×1.00 | 105-119%→×1.10 | ≥120%→×1.20(cap)<br>${isZh ? '结算周期：季末后30天内发放' : 'Settlement: within 30 days after quarter-end'}</div></body></html>`;
 
       const blob = new Blob([html], { type: 'text/html' });
       const a = document.createElement('a');
