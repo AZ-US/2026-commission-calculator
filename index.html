@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>2026 提成计算器 | Commission Calculator</title>
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
 :root {
   --primary: #1a73e8;
@@ -252,6 +253,27 @@ tr:hover td { background: #f8f9fa; }
 .team-account { background: #e6f4ea; color: #0d904f; }
 .team-bd { background: #e8f0fe; color: #1a73e8; }
 .role-director { font-style: italic; color: var(--primary); }
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.chart-grid canvas { width: 100% !important; max-height: 320px; }
+.export-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.export-btn:hover { background: var(--primary-dark); }
+.export-btn.secondary { background: #5f6368; }
+.export-btn.secondary:hover { background: #3c4043; }
+.export-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+@media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
 .login-overlay {
   position: fixed;
   inset: 0;
@@ -474,6 +496,31 @@ tr:hover td { background: #f8f9fa; }
           <div class="sub-num">{{ t('总提成', 'Total Commission') }}: {{ fmtCurrency(grandCommTotal(si)) }}</div>
         </div>
       </div>
+
+      <!-- Charts -->
+      <div class="card">
+        <div class="card-title">{{ t('可视化仪表盘 Visual Dashboard', 'Visual Dashboard') }}</div>
+        <div class="chart-grid">
+          <div><canvas id="chartScenario"></canvas></div>
+          <div><canvas id="chartTeamPie"></canvas></div>
+          <div><canvas id="chartTCC"></canvas></div>
+          <div><canvas id="chartQuarterly"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Export -->
+      <div class="card">
+        <div class="card-title">{{ t('导出报告 Export Reports', 'Export Reports') }}</div>
+        <div class="export-bar">
+          <button class="export-btn" @click="exportEmployee(null)">{{ t('导出全员汇总', 'Export All Summary') }}</button>
+          <template v-for="team in teams">
+            <button v-for="m in team.members" :key="'exp-'+m.id" class="export-btn secondary" @click="exportEmployee(m)">
+              {{ t('导出', 'Export') }} {{ m.name }}
+            </button>
+          </template>
+        </div>
+        <p style="font-size:12px; color:var(--text-secondary)">{{ t('点击按钮后将自动下载 HTML 文件，可直接用浏览器打开或打印为 PDF', 'Click to download an HTML report. Open in browser or print to PDF.') }}</p>
+      </div>
     </template>
 
     <!-- ============ EMPLOYEE DETAIL ============ -->
@@ -492,6 +539,7 @@ tr:hover td { background: #f8f9fa; }
                   <span v-if="m.role === 'director'" class="role-director"> · Override</span>
                 </p>
               </div>
+              <button class="export-btn" style="margin-left:auto" @click="exportEmployee(m)">{{ t('导出此报告', 'Export Report') }}</button>
             </div>
 
             <!-- Editable Parameters -->
@@ -884,12 +932,185 @@ const app = createApp({
       console.log(`[Self-Test] Multiplier@120%: ${m120} (expected 1.20) ${m120 === 1.20 ? 'PASS' : 'FAIL'}`);
     }
 
+    // === Charts ===
+    let charts = {};
+    function renderCharts() {
+      if (activeTab.value !== 'dashboard') return;
+      setTimeout(() => {
+        const allMembers = teams.flatMap(t => t.members);
+        const names = allMembers.map(m => m.name);
+        const colors = ['#fef7e0','#e6f4ea','#e8f0fe','#fce8e6'];
+        const borderColors = ['#e37400','#0d904f','#1a73e8','#c5221f'];
+
+        Object.values(charts).forEach(c => c.destroy());
+        charts = {};
+
+        // 1. Scenario comparison bar chart
+        const ctx1 = document.getElementById('chartScenario');
+        if (ctx1) {
+          charts.scenario = new Chart(ctx1, {
+            type: 'bar',
+            data: {
+              labels: names,
+              datasets: scenarios.map((s, si) => ({
+                label: lang.value === 'zh' ? s.labelZh : s.labelEn,
+                data: allMembers.map(m => calcResult(m, si).annualCommission),
+                backgroundColor: colors[si],
+                borderColor: borderColors[si],
+                borderWidth: 1
+              }))
+            },
+            options: { responsive: true, plugins: { title: { display: true, text: lang.value === 'zh' ? '各场景年度提成对比' : 'Annual Commission by Scenario' }}, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
+          });
+        }
+
+        // 2. Team pie chart
+        const ctx2 = document.getElementById('chartTeamPie');
+        if (ctx2) {
+          const teamData = teams.map(t => teamCommTotal(t, 1));
+          charts.pie = new Chart(ctx2, {
+            type: 'doughnut',
+            data: {
+              labels: teams.map(t => lang.value === 'zh' ? t.nameZh : t.nameEn),
+              datasets: [{ data: teamData, backgroundColor: ['#34a853','#4285f4'], borderWidth: 2 }]
+            },
+            options: { responsive: true, plugins: { title: { display: true, text: lang.value === 'zh' ? '团队提成占比 (100% 目标)' : 'Team Commission Share (100%)' }}}
+          });
+        }
+
+        // 3. TCC 2025 vs 2026 bar
+        const ctx3 = document.getElementById('chartTCC');
+        if (ctx3) {
+          const membersWithRef = allMembers.filter(m => m.ref2025Commission > 0);
+          charts.tcc = new Chart(ctx3, {
+            type: 'bar',
+            data: {
+              labels: membersWithRef.map(m => m.name),
+              datasets: [
+                { label: '2025 TCC', data: membersWithRef.map(m => m.baseSalary + m.ref2025Commission), backgroundColor: '#dadce0', borderColor: '#5f6368', borderWidth: 1 },
+                { label: '2026 TCC (100%)', data: membersWithRef.map(m => calcResult(m, 1).tcc), backgroundColor: '#e8f0fe', borderColor: '#1a73e8', borderWidth: 1 }
+              ]
+            },
+            options: { responsive: true, plugins: { title: { display: true, text: lang.value === 'zh' ? '2025 vs 2026 总薪酬对比' : '2025 vs 2026 TCC Comparison' }}, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
+          });
+        }
+
+        // 4. Quarterly breakdown (100% scenario)
+        const ctx4 = document.getElementById('chartQuarterly');
+        if (ctx4) {
+          charts.quarterly = new Chart(ctx4, {
+            type: 'bar',
+            data: {
+              labels: ['Q1 (22.32%)', 'Q2 (27.50%)', 'Q3 (21.69%)', 'Q4 (28.48%)'],
+              datasets: allMembers.filter(m => m.rate > 0).map((m, i) => ({
+                label: m.name,
+                data: calcResult(m, 1).quarterly,
+                backgroundColor: ['#4285f4','#34a853','#fbbc04','#ea4335','#ff6d01','#46bdc6','#9334e6'][i % 7],
+              }))
+            },
+            options: { responsive: true, plugins: { title: { display: true, text: lang.value === 'zh' ? '季度提成分布 (100% 目标)' : 'Quarterly Commission (100%)' }}, scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
+          });
+        }
+      }, 100);
+    }
+
+    watch([activeTab, lang, teams, scenarios, quarterlyWeights], renderCharts, { deep: true });
+    onMounted(() => { if (authenticated.value) renderCharts(); });
+
+    // === Export ===
+    function exportEmployee(member) {
+      const isZh = lang.value === 'zh';
+      const allMembers = teams.flatMap(t => t.members);
+      const members = member ? [member] : allMembers;
+      const title = member
+        ? `${member.name} — ${isZh ? '2026提成方案' : '2026 Commission Plan'}`
+        : (isZh ? '2026 全员提成汇总报告' : '2026 Commission Summary Report');
+
+      let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title>
+<style>body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;max-width:900px;margin:40px auto;padding:0 20px;color:#202124;font-size:13px}
+h1{font-size:22px;color:#1a73e8;border-bottom:3px solid #1a73e8;padding-bottom:8px}
+h2{font-size:16px;margin:24px 0 8px;color:#1557b0}
+table{width:100%;border-collapse:collapse;margin:12px 0}
+th,td{padding:6px 10px;border:1px solid #dadce0;text-align:right}
+th{background:#f1f3f4;font-weight:600;font-size:11px;text-transform:uppercase}
+th:first-child,td:first-child{text-align:left}
+.highlight{background:#e6f4ea;font-weight:700}
+.footer{margin-top:30px;padding-top:12px;border-top:1px solid #dadce0;font-size:11px;color:#5f6368}
+.page-break{page-break-before:always}
+</style></head><body>
+<h1>${title}</h1>
+<p style="color:#5f6368">${isZh ? '生成日期' : 'Generated'}: ${new Date().toLocaleDateString()}</p>`;
+
+      if (!member) {
+        // Summary table
+        html += `<h2>${isZh ? '全员场景对比' : 'Scenario Comparison — All Employees'}</h2><table>
+<tr><th>${isZh?'姓名':'Name'}</th><th>${isZh?'职位':'Role'}</th><th>${isZh?'底薪':'Base'}</th>
+<th>${isZh?'基准86%':'Baseline 86%'}</th><th>${isZh?'目标100%':'HQ Match 100%'}</th>
+<th>${isZh?'进取105%':'Stretch 105%'}</th><th>${isZh?'卓越120%':'Excellence 120%'}</th></tr>`;
+        for (const m of allMembers) {
+          html += `<tr><td><b>${m.name}</b></td><td>${isZh?m.titleZh:m.titleEn}</td><td>${fmtCurrency(m.baseSalary)}</td>`;
+          for (let si = 0; si < 4; si++) html += `<td${si===1?' class="highlight"':''}>${fmtCurrency(calcResult(m, si).annualCommission)}</td>`;
+          html += '</tr>';
+        }
+        html += '</table>';
+
+        // TCC summary
+        html += `<h2>${isZh ? '总薪酬 TCC (100%)' : 'TCC Summary (100%)'}</h2><table>
+<tr><th>${isZh?'姓名':'Name'}</th><th>${isZh?'底薪':'Base'}</th><th>${isZh?'提成':'Commission'}</th><th>TCC</th></tr>`;
+        let totalBase = 0, totalComm = 0;
+        for (const m of allMembers) {
+          const r = calcResult(m, 1);
+          totalBase += m.baseSalary; totalComm += r.annualCommission;
+          html += `<tr><td><b>${m.name}</b></td><td>${fmtCurrency(m.baseSalary)}</td><td>${fmtCurrency(r.annualCommission)}</td><td class="highlight">${fmtCurrency(r.tcc)}</td></tr>`;
+        }
+        html += `<tr style="font-weight:700;border-top:2px solid #1a73e8"><td>${isZh?'合计':'Total'}</td><td>${fmtCurrency(totalBase)}</td><td>${fmtCurrency(totalComm)}</td><td class="highlight">${fmtCurrency(totalBase+totalComm)}</td></tr></table>`;
+      }
+
+      // Per-employee detail
+      members.forEach((m, idx) => {
+        if (!member && idx > 0) html += '<div class="page-break"></div>';
+        if (!member) html += `<h2>${m.name} — ${isZh?m.titleZh:m.titleEn}</h2>`;
+
+        if (member) {
+          html += `<h2>${isZh ? '基本信息' : 'Basic Info'}</h2><table>
+<tr><td>${isZh?'底薪':'Base Salary'}</td><td>${fmtCurrency(m.baseSalary)}</td></tr>
+<tr><td>${isZh?'提成比例':'Commission Rate'}</td><td>${(m.rate*100).toFixed(4)}%</td></tr>
+<tr><td>${isZh?'收入目标':'Revenue Target'}</td><td>${fmtCurrency(m.revenueTarget)}</td></tr>
+${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><td>${fmtCurrency(m.ref2025Commission)}</td></tr>` : ''}
+</table>`;
+        }
+
+        html += `<h2>${isZh?'四场景明细':'Four-Scenario Breakdown'}</h2><table>
+<tr><th>${isZh?'指标':'Metric'}</th><th>${isZh?'基准86%':'Baseline'}</th><th>${isZh?'目标100%':'HQ Match'}</th><th>${isZh?'进取105%':'Stretch'}</th><th>${isZh?'卓越120%':'Excellence'}</th></tr>`;
+        html += `<tr><td>${isZh?'达成率':'Attainment'}</td>${scenarios.map(s => `<td>${fmtPct(s.attainment)}</td>`).join('')}</tr>`;
+        html += `<tr><td>${isZh?'收入乘数':'Multiplier'}</td>${scenarios.map((s,si) => `<td>×${calcResult(m,si).multiplier.toFixed(2)}</td>`).join('')}</tr>`;
+        html += `<tr style="font-weight:700"><td>${isZh?'年度提成':'Annual Commission'}</td>${scenarios.map((s,si) => `<td${si===1?' class="highlight"':''}>${fmtCurrency(calcResult(m,si).annualCommission)}</td>`).join('')}</tr>`;
+        for (let qi = 0; qi < 4; qi++) {
+          html += `<tr><td>Q${qi+1} (${fmtPct(quarterlyWeights[qi])})</td>${scenarios.map((s,si) => `<td>${fmtCurrency(calcResult(m,si).quarterly[qi])}</td>`).join('')}</tr>`;
+        }
+        html += `<tr style="font-weight:700;border-top:2px solid #1a73e8"><td>TCC</td>${scenarios.map((s,si) => `<td${si===1?' class="highlight"':''}>${fmtCurrency(calcResult(m,si).tcc)}</td>`).join('')}</tr>`;
+        if (m.ref2025Commission) {
+          html += `<tr><td>${isZh?'提成较2025':'vs 2025'}</td>${scenarios.map((s,si) => `<td>${fmtPct((calcResult(m,si).annualCommission - m.ref2025Commission)/m.ref2025Commission)}</td>`).join('')}</tr>`;
+        }
+        html += '</table>';
+      });
+
+      html += `<div class="footer">${isZh ? '收入乘数规则' : 'Revenue Multiplier'}: &lt;86%→×0.80 | 86-99%→×actual | 100-104%→×1.00 | 105-119%→×1.10 | ≥120%→×1.20(cap)<br>${isZh ? '结算周期：季末后30天内发放' : 'Settlement: within 30 days after quarter-end'}</div></body></html>`;
+
+      const blob = new Blob([html], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = member ? `${member.name}_Commission_2026.html` : 'Commission_Summary_2026.html';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
     return {
       authenticated, passwordInput, loginError, doLogin,
       lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
       t, fmtCurrency, fmtPct, calcResult, customResult,
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
-      weightWarning, scenarioClass,
+      weightWarning, scenarioClass, exportEmployee,
       saveToFile, loadFromFile, resetDefaults,
     };
   }
