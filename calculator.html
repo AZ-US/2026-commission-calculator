@@ -23,7 +23,7 @@
   const stateDoc = doc(db, "calculator", "shared");
 
   // Editor mode: only URLs with ?edit=<secret> can write to cloud
-  const EDIT_SECRET = "amy2026";
+  const EDIT_SECRET = "AmyZ2026";
   const urlParams = new URLSearchParams(window.location.search);
   const isEditor = urlParams.get('edit') === EDIT_SECRET;
 
