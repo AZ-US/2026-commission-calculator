@@ -700,7 +700,7 @@ tr:hover td { background: #f8f9fa; }
 <script>
 const { createApp, ref, reactive, computed, watch, onMounted } = Vue;
 
-const STORAGE_KEY = 'commissionCalc2026';
+const STORAGE_KEY = 'commissionCalc2026_v4';
 
 function defaultTeams() {
   return [
@@ -896,6 +896,8 @@ const app = createApp({
     }
 
     onMounted(() => {
+      // Clear old v3 localStorage data to prevent stale values overriding v4 defaults
+      localStorage.removeItem('commissionCalc2026');
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) loadState(JSON.parse(saved));
