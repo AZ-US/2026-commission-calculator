@@ -660,16 +660,17 @@ function defaultTeams() {
       key: 'account', nameZh: '客户团队', nameEn: 'Account Team',
       members: [
         { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, ref2025Commission: 6000 },
-        { id: 'nancy', name: 'Nancy (TBD)', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 110000, rate: 0.0008, revenueTarget: 31618064, ref2025Commission: 20516 },
-        { id: 'justin', name: 'Justin', titleZh: '客户经理', titleEn: 'Account Mgr', role: 'individual', baseSalary: 75000, rate: 0.0008, revenueTarget: 31618064, ref2025Commission: 6091 },
+        { id: 'nancy', name: 'Nancy (TBD)', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 120000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 20516 },
+        { id: 'justin', name: 'Justin', titleZh: '客户经理', titleEn: 'Account Mgr', role: 'individual', baseSalary: 75000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 21129 },
       ]
     },
     {
       key: 'bd', nameZh: 'BD团队', nameEn: 'BD Team',
       members: [
         { id: 'jonathan', name: 'Jonathan', titleZh: 'BD总监', titleEn: 'BD Director', role: 'director', baseSalary: 165000, rate: 0.0065, revenueTarget: 6323613, ref2025Commission: 24778 },
-        { id: 'daniel', name: 'Daniel', titleZh: 'BD经理', titleEn: 'BD Manager', role: 'individual', baseSalary: 125000, rate: 0.008, revenueTarget: 3161806, ref2025Commission: 0 },
-        { id: 'dash', name: 'Dash', titleZh: 'BD专员', titleEn: 'BD Specialist', role: 'individual', baseSalary: 96000, rate: 0.012, revenueTarget: 2023556, ref2025Commission: 0 },
+        { id: 'daniel', name: 'Daniel', titleZh: 'BD经理', titleEn: 'BD Manager', role: 'individual', baseSalary: 125000, rate: 0.008, revenueTarget: 3794168, ref2025Commission: 10114 },
+        { id: 'dash', name: 'Dash', titleZh: 'BD专员', titleEn: 'BD Specialist', role: 'individual', baseSalary: 96000, rate: 0.01, revenueTarget: 2529445, ref2025Commission: 15486 },
+        { id: 'robert', name: 'Robert (TBD)', titleZh: 'BD副总裁', titleEn: 'BD VP', role: 'individual', baseSalary: 160000, rate: 0, revenueTarget: 0, ref2025Commission: 29664 },
       ]
     }
   ];
@@ -861,9 +862,15 @@ const app = createApp({
       const pass = Math.abs(r100.annualCommission - expected) < 0.01;
       console.log(`[Self-Test] Emily@100%: ${r100.annualCommission.toFixed(2)} (expected ~${expected.toFixed(2)}) ${pass ? 'PASS' : 'FAIL'}`);
 
+      const nancy = teams[0].members[1];
+      const rn = calcCommission(nancy, 1.00, quarterlyWeights);
+      const expNancy = 15809032 * 0.0015 * 1.00;
+      const pass1b = Math.abs(rn.annualCommission - expNancy) < 0.01;
+      console.log(`[Self-Test] Nancy@100%: ${rn.annualCommission.toFixed(2)} (expected ~${expNancy.toFixed(2)}) ${pass1b ? 'PASS' : 'FAIL'}`);
+
       const dash = teams[1].members[2];
       const rd = calcCommission(dash, 1.00, quarterlyWeights);
-      const expDash = 2023556 * 0.012 * 1.00;
+      const expDash = 2529445 * 0.01 * 1.00;
       const pass2 = Math.abs(rd.annualCommission - expDash) < 0.01;
       console.log(`[Self-Test] Dash@100%: ${rd.annualCommission.toFixed(2)} (expected ~${expDash.toFixed(2)}) ${pass2 ? 'PASS' : 'FAIL'}`);
 
