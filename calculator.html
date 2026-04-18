@@ -961,13 +961,17 @@ function calcCommission(member, attainment, weights) {
 }
 
 // Calculate actual commission for one quarter based on inputted actual revenue
+// If actual revenue not entered (= 0), commission = 0 (no calculation)
 function calcActualQuarter(member, qi, weights) {
   const qTarget = member.revenueTarget * weights[qi];
   const actual = (member.quarterlyActual || [0,0,0,0])[qi] || 0;
+  if (actual === 0) {
+    return { attainment: 0, multiplier: 0, commission: 0, actual: 0, qTarget, entered: false };
+  }
   const attainment = qTarget > 0 ? actual / qTarget : 0;
   const multiplier = getMultiplier(attainment);
   const commission = member.revenueTarget * member.rate * weights[qi] * multiplier;
-  return { attainment, multiplier, commission, actual, qTarget };
+  return { attainment, multiplier, commission, actual, qTarget, entered: true };
 }
 
 // YTD totals for one member
