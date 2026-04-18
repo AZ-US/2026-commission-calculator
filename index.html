@@ -6,6 +6,7 @@
 <title>2026 提成计算器 | Commission Calculator</title>
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
 :root {
   --primary: #1a73e8;
@@ -369,8 +370,9 @@ tr:hover td { background: #f8f9fa; }
     <h1>{{ t('2026 提成计算器', '2026 Commission Calculator') }}</h1>
     <div class="header-actions">
       <button class="lang-toggle" @click="lang = lang === 'zh' ? 'en' : 'zh'">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
-      <button @click="saveToFile">{{ t('保存', 'Save') }}</button>
-      <label>{{ t('加载', 'Load') }}<input type="file" class="hidden-input" accept=".json" @change="loadFromFile"></label>
+      <button @click="saveToFile">{{ t('备份', 'Backup') }}</button>
+      <label>{{ t('导入', 'Import') }}<input type="file" class="hidden-input" accept=".json" @change="loadFromFile"></label>
+      <button @click="exportAllExcel" style="background:#34a853;color:#fff;border-color:#34a853">{{ t('导出 Excel', 'Export Excel') }}</button>
       <button @click="resetDefaults">{{ t('重置', 'Reset') }}</button>
       <button @click="window.print()">{{ t('打印', 'Print') }}</button>
     </div>
@@ -690,7 +692,10 @@ tr:hover td { background: #f8f9fa; }
                   <span v-if="m.role === 'director'" class="role-director"> · Override</span>
                 </p>
               </div>
-              <button class="export-btn" style="margin-left:auto" @click="exportEmployee(m)">{{ t('导出此报告', 'Export Report') }}</button>
+              <div style="margin-left:auto;display:flex;gap:8px">
+                <button class="export-btn" @click="exportEmployee(m)">{{ t('导出 HTML', 'Export HTML') }}</button>
+                <button class="export-btn" style="background:#34a853;color:#fff;border-color:#34a853" @click="exportMemberExcel(m)">{{ t('导出 Excel', 'Export Excel') }}</button>
+              </div>
             </div>
 
             <!-- Editable Parameters -->
@@ -1395,12 +1400,119 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       URL.revokeObjectURL(a.href);
     }
 
+    // === Excel Export ===
+    function xlsDownload(wb, filename) {
+      XLSX.writeFile(wb, filename);
+    }
+
+    function buildScenarioSheet(m) {
+      const isZh = lang.value === 'zh';
+      const sLabels = ['Baseline 86%', 'HQ Match 100%', 'Stretch 105%', 'Excellence 120%'];
+      const rows = [];
+      rows.push([isZh ? '指标' : 'Metric', ...sLabels]);
+      rows.push([isZh ? '达成率' : 'Attainment', ...scenarios.map(s => s.attainment)]);
+      rows.push([isZh ? '收入乘数' : 'Multiplier', ...scenarios.map((s,si) => calcResult(m,si).multiplier)]);
+      rows.push([isZh ? '场景收入' : 'Scenario Revenue', ...scenarios.map(s => m.revenueTarget * s.attainment)]);
+      rows.push([isZh ? '年度提成' : 'Annual Commission', ...scenarios.map((s,si) => calcResult(m,si).annualCommission)]);
+      for (let qi = 0; qi < 4; qi++) {
+        rows.push([`Q${qi+1} ${isZh?'提成':'Commission'} (${(quarterlyWeights[qi]*100).toFixed(2)}%)`,
+          ...scenarios.map((s,si) => calcResult(m,si).quarterly[qi])]);
+      }
+      rows.push([isZh ? '总薪酬 TCC' : 'Total Comp TCC', ...scenarios.map((s,si) => calcResult(m,si).tcc)]);
+      if (m.ref2025Commission) {
+        rows.push([isZh ? '提成较2025变化' : 'vs 2025', ...scenarios.map((s,si) =>
+          calcResult(m,si).annualCommission - m.ref2025Commission)]);
+      }
+      return rows;
+    }
+
+    function buildActualSheet(m) {
+      const isZh = lang.value === 'zh';
+      const rows = [];
+      rows.push([isZh?'季度':'Quarter', isZh?'季度目标':'Q Target', isZh?'实际收入':'Actual Revenue',
+                 isZh?'完成率':'Attainment', isZh?'乘数':'Multiplier', isZh?'实际提成':'Earned Commission']);
+      for (let qi = 0; qi < 4; qi++) {
+        const r = memberActualQ(m, qi);
+        rows.push([`Q${qi+1}`, m.revenueTarget * quarterlyWeights[qi],
+          m.quarterlyActual[qi] || 0, r.entered ? r.attainment : '', r.entered ? r.multiplier : '', r.commission]);
+      }
+      const ytd = memberActualYTD(m);
+      rows.push([isZh?'YTD合计':'YTD Total', m.revenueTarget, ytd.totalActual,
+        ytd.totalActual > 0 ? ytd.ytdAttainment : '', '', ytd.totalCommission]);
+      return rows;
+    }
+
+    function exportMemberExcel(m) {
+      const isZh = lang.value === 'zh';
+      const wb = XLSX.utils.book_new();
+      const ws1 = XLSX.utils.aoa_to_sheet(buildScenarioSheet(m));
+      const ws2 = XLSX.utils.aoa_to_sheet(buildActualSheet(m));
+      XLSX.utils.book_append_sheet(wb, ws1, isZh ? '四场景明细' : 'Scenarios');
+      XLSX.utils.book_append_sheet(wb, ws2, isZh ? '实际完成追踪' : 'Actual Tracking');
+      xlsDownload(wb, `${m.name}_Commission_2026.xlsx`);
+    }
+
+    function exportAllExcel() {
+      const isZh = lang.value === 'zh';
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Team Overview (all 4 scenarios)
+      const ovRows = [[isZh?'姓名':'Name', isZh?'团队':'Team', isZh?'职位':'Role',
+        isZh?'底薪':'Base Salary', 'Baseline 86%', 'HQ Match 100%', 'Stretch 105%', 'Excellence 120%']];
+      teams.forEach(team => {
+        team.members.forEach(m => {
+          ovRows.push([m.name, isZh ? team.nameZh : team.nameEn, isZh ? m.titleZh : m.titleEn,
+            m.baseSalary, ...scenarios.map((s,si) => calcResult(m,si).annualCommission)]);
+        });
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ovRows), isZh ? '团队总览' : 'Team Overview');
+
+      // Sheet 2: All-team actual commission summary (Q1-Q4 per person)
+      const commRows = [[isZh?'姓名':'Name', isZh?'团队':'Team', 'Q1', 'Q2', 'Q3', 'Q4', isZh?'全年合计':'Annual Total']];
+      teams.forEach(team => {
+        team.members.forEach(m => {
+          commRows.push([m.name, isZh ? team.nameZh : team.nameEn,
+            ...([0,1,2,3].map(qi => memberCommQ(m,qi))), memberCommYTD(m)]);
+        });
+      });
+      commRows.push([isZh?'合计':'Total', '', ...[0,1,2,3].map(qi => allCommissionQ(qi)), ytdActualCommission.value]);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(commRows), isZh ? '实际提成汇总' : 'Commission Summary');
+
+      // Sheet 3: Quarterly actual revenue summary
+      const revRows = [[isZh?'季度':'Quarter', isZh?'Account目标':'Account Target',
+        isZh?'Account实际':'Account Actual', isZh?'Account完成率':'Account Attainment',
+        isZh?'BD目标':'BD Target', isZh?'BD实际':'BD Actual', isZh?'BD完成率':'BD Attainment']];
+      for (let qi = 0; qi < 4; qi++) {
+        revRows.push([`Q${qi+1}`, accountQTarget(qi), accountQActual(qi),
+          accountQActual(qi) > 0 ? accountQAttainment(qi) : '',
+          bdQTarget(qi), bdQActual(qi), bdQActual(qi) > 0 ? bdQAttainment(qi) : '']);
+      }
+      revRows.push([isZh?'全年':'Annual', grandAnnualTarget.value, ytdActualRevenue.value,
+        ytdActualRevenue.value > 0 ? ytdAttainment.value : '',
+        bdAnnualTarget.value, ytdBdActual.value,
+        ytdBdActual.value > 0 ? ytdBdActual.value / bdAnnualTarget.value : '']);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(revRows), isZh ? '季度收入汇总' : 'Quarterly Revenue');
+
+      // Sheets 4+: Individual scenario + actual sheets per person
+      teams.forEach(team => {
+        team.members.forEach(m => {
+          const ws = XLSX.utils.aoa_to_sheet(buildScenarioSheet(m));
+          const wa = XLSX.utils.aoa_to_sheet(buildActualSheet(m));
+          XLSX.utils.book_append_sheet(wb, ws, `${m.name.substring(0,12)}_${isZh?'场景':'Scenarios'}`);
+          XLSX.utils.book_append_sheet(wb, wa, `${m.name.substring(0,12)}_${isZh?'实际':'Actual'}`);
+        });
+      });
+
+      xlsDownload(wb, `Commission_2026_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
     return {
       authenticated, passwordInput, loginError, doLogin,
       lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
       t, fmtCurrency, fmtPct, calcResult, customResult,
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
       weightWarning, scenarioClass, exportEmployee,
+      exportMemberExcel, exportAllExcel,
       saveToFile, loadFromFile, resetDefaults,
       memberActualQ, memberActualYTD,
       accountQTarget, accountQActual, accountQAttainment,
