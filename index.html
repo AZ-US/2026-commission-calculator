@@ -413,42 +413,96 @@ tr:hover td { background: #f8f9fa; }
       <!-- Quarterly Actual Summary -->
       <div class="card">
         <div class="card-title">📊 {{ t('季度实际完成汇总 Quarterly Actual Summary', 'Quarterly Actual Summary') }}</div>
-        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">
-          {{ t('汇总所有员工的实际完成情况（在各员工页面输入数据后自动更新）', 'Aggregates actual data entered in each employee tab') }}
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:4px">
+          {{ t('Account 总额 = 公司总收入目标（$63,236,128）；BD 目标为其中 10%，已包含在内，不重复计算。', 'Account total = company revenue target ($63,236,128). BD quota is 10% of Account and is included — not additive.') }}
         </p>
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px">
+          {{ t('💡 请在 Emily 页面输入公司总收入，在 Jonathan 页面输入 BD 收入。', '💡 Enter total company revenue in Emily\'s tab; BD revenue in Jonathan\'s tab.') }}
+        </p>
+
+        <!-- Account (Company Total) -->
+        <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#1a73e8">
+          🏢 {{ t('Account 团队 — 公司总收入', 'Account Team — Total Company Revenue') }}
+        </div>
+        <div style="overflow-x:auto;margin-bottom:20px">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('季度', 'Quarter') }}</th>
+                <th>{{ t('季度目标', 'Q Target') }}</th>
+                <th style="background:#e8f5e9">{{ t('Emily 输入的实际收入', 'Actual Revenue (Emily)') }}</th>
+                <th>{{ t('完成率', 'Attainment') }}</th>
+                <th>{{ t('全团队提成合计', 'All-Team Commission') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="qi in 4" :key="'acct'+qi">
+                <td><strong>Q{{ qi }}</strong></td>
+                <td>{{ fmtCurrency(accountQTarget(qi-1)) }}</td>
+                <td style="background:#f1f8f1">{{ fmtCurrency(accountQActual(qi-1)) }}</td>
+                <td>
+                  <span v-if="accountQActual(qi-1) > 0"
+                        :style="accountQAttainment(qi-1) >= 1 ? 'color:#34a853;font-weight:600' : accountQAttainment(qi-1) >= 0.86 ? 'color:#fbbc04;font-weight:600' : 'color:#ea4335;font-weight:600'">
+                    {{ fmtPct(accountQAttainment(qi-1)) }}
+                  </span>
+                  <span v-else style="color:var(--text-secondary)">—</span>
+                </td>
+                <td style="font-weight:700">{{ fmtCurrency(allCommissionQ(qi-1)) }}</td>
+              </tr>
+              <tr style="font-weight:700;border-top:2px solid var(--primary);background:#f8f9fa">
+                <td>{{ t('全年合计', 'Annual Total') }}</td>
+                <td>{{ fmtCurrency(grandAnnualTarget) }}</td>
+                <td style="background:#e8f5e9">{{ fmtCurrency(ytdActualRevenue) }}</td>
+                <td :style="ytdAttainment >= 1 ? 'color:#34a853' : ytdAttainment >= 0.86 ? 'color:#fbbc04' : ytdActualRevenue > 0 ? 'color:#ea4335' : ''">
+                  {{ ytdActualRevenue > 0 ? fmtPct(ytdAttainment) : '—' }}
+                </td>
+                <td style="font-weight:700;color:var(--primary)">{{ fmtCurrency(ytdActualCommission) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- BD (Subset) -->
+        <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#e67700">
+          📌 {{ t('BD 团队 — 子集（已含于 Account 总额内）', 'BD Team — Subset of Account (not additive)') }}
+        </div>
         <div style="overflow-x:auto">
           <table>
             <thead>
               <tr>
                 <th>{{ t('季度', 'Quarter') }}</th>
-                <th>{{ t('合计目标', 'Team Target') }}</th>
-                <th style="background:#e8f5e9">{{ t('实际完成', 'Actual Revenue') }}</th>
-                <th>{{ t('完成率', 'Attainment') }}</th>
-                <th style="font-weight:700">{{ t('实际提成合计', 'Total Commission Earned') }}</th>
+                <th>{{ t('BD 季度目标', 'BD Q Target') }}</th>
+                <th style="background:#fff3e0">{{ t('Jonathan 输入的 BD 收入', 'BD Actual Revenue (Jonathan)') }}</th>
+                <th>{{ t('BD 完成率', 'BD Attainment') }}</th>
+                <th>{{ t('BD 占 Account %', 'BD % of Account') }}</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="qi in 4" :key="'qsum'+qi">
+              <tr v-for="qi in 4" :key="'bd'+qi">
                 <td><strong>Q{{ qi }}</strong></td>
-                <td>{{ fmtCurrency(qActualTarget(qi-1)) }}</td>
-                <td style="background:#f1f8f1">{{ fmtCurrency(qActualRevenue(qi-1)) }}</td>
+                <td>{{ fmtCurrency(bdQTarget(qi-1)) }}</td>
+                <td style="background:#fff8f0">{{ fmtCurrency(bdQActual(qi-1)) }}</td>
                 <td>
-                  <span v-if="qActualTarget(qi-1) > 0"
-                        :style="qActualRevenue(qi-1)/qActualTarget(qi-1) >= 1 ? 'color:#34a853;font-weight:600' : qActualRevenue(qi-1)/qActualTarget(qi-1) >= 0.86 ? 'color:#fbbc04;font-weight:600' : 'color:#ea4335;font-weight:600'">
-                    {{ qActualRevenue(qi-1) > 0 ? fmtPct(qActualRevenue(qi-1)/qActualTarget(qi-1)) : '—' }}
+                  <span v-if="bdQActual(qi-1) > 0"
+                        :style="bdQAttainment(qi-1) >= 1 ? 'color:#34a853;font-weight:600' : bdQAttainment(qi-1) >= 0.86 ? 'color:#fbbc04;font-weight:600' : 'color:#ea4335;font-weight:600'">
+                    {{ fmtPct(bdQAttainment(qi-1)) }}
                   </span>
                   <span v-else style="color:var(--text-secondary)">—</span>
                 </td>
-                <td style="font-weight:700">{{ fmtCurrency(qActualCommission(qi-1)) }}</td>
-              </tr>
-              <tr style="font-weight:700;border-top:2px solid var(--primary);background:#f8f9fa">
-                <td>{{ t('全年 YTD', 'YTD Total') }}</td>
-                <td>{{ fmtCurrency(grandAnnualTarget) }}</td>
-                <td style="background:#e8f5e9">{{ fmtCurrency(ytdActualRevenue) }}</td>
-                <td :style="grandAnnualTarget > 0 && ytdActualRevenue/grandAnnualTarget >= 1 ? 'color:#34a853' : 'color:#ea4335'">
-                  {{ ytdActualRevenue > 0 ? fmtPct(ytdActualRevenue/grandAnnualTarget) : '—' }}
+                <td style="color:var(--text-secondary)">
+                  {{ accountQActual(qi-1) > 0 ? fmtPct(bdQActual(qi-1) / accountQActual(qi-1)) : '—' }}
                 </td>
-                <td style="font-weight:700;color:var(--primary)">{{ fmtCurrency(ytdActualCommission) }}</td>
+              </tr>
+              <tr style="font-weight:700;border-top:2px solid #e67700;background:#fffaf5">
+                <td>{{ t('全年合计', 'Annual Total') }}</td>
+                <td>{{ fmtCurrency(bdDirector?.revenueTarget || 0) }}</td>
+                <td style="background:#fff3e0">{{ fmtCurrency(ytdBdActual) }}</td>
+                <td :style="(bdDirector?.revenueTarget || 0) > 0 && ytdBdActual/(bdDirector?.revenueTarget||1) >= 1 ? 'color:#34a853' : ytdBdActual > 0 ? 'color:#fbbc04' : ''">
+                  {{ ytdBdActual > 0 && (bdDirector?.revenueTarget||0) > 0 ? fmtPct(ytdBdActual/(bdDirector.revenueTarget)) : '—' }}
+                </td>
+                <td style="color:var(--text-secondary)">
+                  {{ ytdActualRevenue > 0 ? fmtPct(ytdBdActual/ytdActualRevenue) : '—' }}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -940,19 +994,32 @@ const app = createApp({
     // All members flat list
     const allMembers = computed(() => teams.flatMap(t => t.members));
 
-    // Actual quarter helpers for dashboard summary
-    function qActualTarget(qi) {
-      return allMembers.value.reduce((s, m) => s + m.revenueTarget * quarterlyWeights[qi], 0);
-    }
-    function qActualRevenue(qi) {
-      return allMembers.value.reduce((s, m) => s + ((m.quarterlyActual || [])[qi] || 0), 0);
-    }
-    function qActualCommission(qi) {
+    // ── Revenue structure ──────────────────────────────────────────────────
+    // Company total revenue = Account team total = Emily (Account Director)
+    // BD revenue is a SUBSET of Account revenue (~10%), NOT additive
+    // ──────────────────────────────────────────────────────────────────────
+    const accountDirector = computed(() => teams[0]?.members.find(m => m.role === 'director'));
+    const bdDirector      = computed(() => teams[1]?.members.find(m => m.role === 'director'));
+
+    // Company (Account) revenue helpers — Emily is the source of truth
+    const grandAnnualTarget = computed(() => accountDirector.value?.revenueTarget || 0);
+    function accountQTarget(qi) { return (accountDirector.value?.revenueTarget || 0) * quarterlyWeights[qi]; }
+    function accountQActual(qi) { return (accountDirector.value?.quarterlyActual || [])[qi] || 0; }
+    function accountQAttainment(qi) { const t = accountQTarget(qi); return t > 0 ? accountQActual(qi) / t : 0; }
+    const ytdActualRevenue = computed(() => [0,1,2,3].reduce((s, qi) => s + accountQActual(qi), 0));
+    const ytdAttainment    = computed(() => grandAnnualTarget.value > 0 ? ytdActualRevenue.value / grandAnnualTarget.value : 0);
+
+    // BD revenue helpers — Jonathan's actual, shown as subset of Account
+    function bdQTarget(qi) { return (bdDirector.value?.revenueTarget || 0) * quarterlyWeights[qi]; }
+    function bdQActual(qi) { return (bdDirector.value?.quarterlyActual || [])[qi] || 0; }
+    function bdQAttainment(qi) { const t = bdQTarget(qi); return t > 0 ? bdQActual(qi) / t : 0; }
+    const ytdBdActual      = computed(() => [0,1,2,3].reduce((s, qi) => s + bdQActual(qi), 0));
+
+    // Total commission earned = sum of all individuals (each earns separately)
+    function allCommissionQ(qi) {
       return allMembers.value.reduce((s, m) => s + calcActualQuarter(m, qi, quarterlyWeights).commission, 0);
     }
-    const ytdActualRevenue = computed(() => [0,1,2,3].reduce((s, qi) => s + qActualRevenue(qi), 0));
-    const ytdActualCommission = computed(() => [0,1,2,3].reduce((s, qi) => s + qActualCommission(qi), 0));
-    const grandAnnualTarget = computed(() => allMembers.value.reduce((s, m) => s + m.revenueTarget, 0));
+    const ytdActualCommission = computed(() => [0,1,2,3].reduce((s, qi) => s + allCommissionQ(qi), 0));
 
     // Per-member actual YTD helper for template
     function memberActualYTD(m) { return calcActualYTD(m, quarterlyWeights); }
@@ -1267,8 +1334,11 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       weightWarning, scenarioClass, exportEmployee,
       saveToFile, loadFromFile, resetDefaults,
       memberActualQ, memberActualYTD,
-      qActualTarget, qActualRevenue, qActualCommission,
-      ytdActualRevenue, ytdActualCommission, grandAnnualTarget,
+      accountQTarget, accountQActual, accountQAttainment,
+      bdQTarget, bdQActual, bdQAttainment,
+      ytdActualRevenue, ytdAttainment, ytdBdActual,
+      ytdActualCommission, grandAnnualTarget,
+      allCommissionQ,
     };
   }
 });
