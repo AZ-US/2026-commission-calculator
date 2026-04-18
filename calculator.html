@@ -823,7 +823,15 @@ tr:hover td { background: #f8f9fa; }
 
       <!-- Charts -->
       <div class="card">
-        <div class="card-title">{{ t('可视化仪表盘 Visual Dashboard', 'Visual Dashboard') }}</div>
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+          <span>{{ t('可视化仪表盘 Visual Dashboard', 'Visual Dashboard') }}</span>
+          <button @click="renderCharts" style="font-size:12px;padding:6px 12px;background:#e8f0fe;color:#1a73e8;border:1px solid #1a73e8;border-radius:6px;cursor:pointer;font-weight:500">
+            🔄 {{ t('刷新图表', 'Refresh Charts') }}
+          </button>
+        </div>
+        <p style="font-size:11px;color:var(--text-secondary);margin-bottom:10px">
+          {{ t('图表仅在切换页面或点击刷新时更新，避免录入数据时晃动。上方数据卡片和表格仍然实时同步。', 'Charts only update on tab switch or manual refresh, to avoid flicker while typing. Cards and tables above remain live.') }}
+        </p>
         <div class="chart-grid">
           <div><canvas id="chartQuarterlyRev"></canvas></div>
           <div><canvas id="chartMemberYTD"></canvas></div>
@@ -1612,7 +1620,10 @@ const app = createApp({
       }, 100);
     }
 
-    watch([activeTab, lang, teams, scenarios, quarterlyWeights], renderCharts, { deep: true });
+    // Only re-render charts on tab switch / language change — NOT on every keystroke.
+    // This prevents the dashboard from visually "jumping" while anyone is typing.
+    // Users can click "🔄 刷新图表" to manually refresh the charts with latest data.
+    watch([activeTab, lang], renderCharts);
     onMounted(() => { if (authenticated.value) renderCharts(); });
 
     // === Export ===
@@ -1828,6 +1839,7 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       cloudStatus, isEditorMode, reloadFromCloud,
       contributorMembers, contributorQActual, contributorYTD, contributorsTotalYTD,
       accountQActualEmily, accountQActualContributors,
+      renderCharts,
     };
   }
 });

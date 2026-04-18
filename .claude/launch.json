@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "calculator",
+      "name": "calc",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8765", "-d", "/Users/amyzhou/计算器"],
+      "runtimeArgs": ["-m", "http.server", "8765"],
       "port": 8765
     }
   ]
