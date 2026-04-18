@@ -7,6 +7,37 @@
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  const firebaseConfig = {
+    apiKey: "AIzaSyB2ft9H5rdZvMKU8P62COYjyNlp_Tglfts",
+    authDomain: "commission-calculator-dd155.firebaseapp.com",
+    projectId: "commission-calculator-dd155",
+    storageBucket: "commission-calculator-dd155.firebasestorage.app",
+    messagingSenderId: "827374308396",
+    appId: "1:827374308396:web:cea7a32bdf54125fe35589"
+  };
+  const fbApp = initializeApp(firebaseConfig);
+  const db = getFirestore(fbApp);
+  const stateDoc = doc(db, "calculator", "shared");
+  window.__firestore = {
+    ready: true,
+    subscribe(cb) {
+      return onSnapshot(stateDoc, (snap) => {
+        if (snap.exists()) cb(snap.data());
+      }, (err) => console.error('[Firestore] subscribe error:', err));
+    },
+    async save(state) {
+      try {
+        await setDoc(stateDoc, { ...state, _updatedAt: Date.now() });
+      } catch (e) {
+        console.error('[Firestore] save error:', e);
+      }
+    }
+  };
+  window.dispatchEvent(new Event('firestore-ready'));
+</script>
 <style>
 :root {
   --primary: #1a73e8;
@@ -367,7 +398,15 @@ tr:hover td { background: #f8f9fa; }
 
   <!-- Header -->
   <header v-if="authenticated" class="app-header">
-    <h1>{{ t('2026 提成计算器', '2026 Commission Calculator') }}</h1>
+    <h1>
+      {{ t('2026 提成计算器', '2026 Commission Calculator') }}
+      <span :title="cloudStatus" style="font-size:12px;font-weight:400;margin-left:10px;opacity:0.9">
+        <span v-if="cloudStatus === 'synced'">☁️ {{ t('已同步', 'Synced') }}</span>
+        <span v-else-if="cloudStatus === 'syncing'">⏳ {{ t('同步中…', 'Syncing…') }}</span>
+        <span v-else-if="cloudStatus === 'offline'">⚠️ {{ t('离线', 'Offline') }}</span>
+        <span v-else>💾 {{ t('本地', 'Local') }}</span>
+      </span>
+    </h1>
     <div class="header-actions">
       <button class="lang-toggle" @click="lang = lang === 'zh' ? 'en' : 'zh'">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
       <button @click="saveToFile">{{ t('备份', 'Backup') }}</button>
@@ -1178,11 +1217,23 @@ const app = createApp({
     }
 
     let saveTimeout;
+    let applyingRemote = false;        // true while we are applying a remote snapshot — prevents write-loop
+    const cloudStatus = ref('local');  // 'local' | 'syncing' | 'synced' | 'offline'
     function autoSave() {
       clearTimeout(saveTimeout);
       saveTimeout = setTimeout(() => {
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(getState())); } catch(e) {}
-      }, 500);
+        const state = getState();
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+        if (applyingRemote) return;    // don't echo remote updates back to cloud
+        if (window.__firestore && window.__firestore.ready) {
+          cloudStatus.value = 'syncing';
+          window.__firestore.save(state).then(() => {
+            cloudStatus.value = 'synced';
+          }).catch(() => {
+            cloudStatus.value = 'offline';
+          });
+        }
+      }, 800);
     }
 
     watch([teams, scenarios, quarterlyWeights, lang, customAttainment], autoSave, { deep: true });
@@ -1230,7 +1281,23 @@ const app = createApp({
         if (saved) loadState(JSON.parse(saved));
       } catch(e) {}
       selfTest();
-      // Init history with current state
+
+      // Subscribe to cloud updates — remote snapshot always wins on initial load
+      function startCloudSync() {
+        if (!window.__firestore || !window.__firestore.ready) return false;
+        cloudStatus.value = 'syncing';
+        window.__firestore.subscribe((remoteState) => {
+          applyingRemote = true;
+          loadState(remoteState);
+          cloudStatus.value = 'synced';
+          // release the flag after Vue reactivity finishes so our watcher sees applyingRemote=true
+          setTimeout(() => { applyingRemote = false; }, 100);
+        });
+        return true;
+      }
+      if (!startCloudSync()) {
+        window.addEventListener('firestore-ready', startCloudSync, { once: true });
+      }
     });
 
     function selfTest() {
@@ -1557,6 +1624,7 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       ytdActualCommission, ytdAccountTeamComm, ytdBdTeamComm, grandAnnualTarget,
       accountTeamCommQ, bdTeamCommQ, allCommissionQ,
       memberCommQ, memberCommYTD,
+      cloudStatus,
     };
   }
 });
