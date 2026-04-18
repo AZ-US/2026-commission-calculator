@@ -21,19 +21,37 @@
   const fbApp = initializeApp(firebaseConfig);
   const db = getFirestore(fbApp);
   const stateDoc = doc(db, "calculator", "shared");
+
+  // Editor mode: only URLs with ?edit=<secret> can write to cloud
+  const EDIT_SECRET = "amy2026";
+  const urlParams = new URLSearchParams(window.location.search);
+  const isEditor = urlParams.get('edit') === EDIT_SECRET;
+
   window.__firestore = {
     ready: true,
+    isEditor,
     subscribe(cb) {
       return onSnapshot(stateDoc, (snap) => {
         if (snap.exists()) cb(snap.data());
       }, (err) => console.error('[Firestore] subscribe error:', err));
     },
     async save(state) {
+      if (!isEditor) return;  // viewers never write
       try {
-        await setDoc(stateDoc, { ...state, _updatedAt: Date.now() });
+        await setDoc(stateDoc, { ...state, writeSecret: EDIT_SECRET, _updatedAt: Date.now() });
       } catch (e) {
         console.error('[Firestore] save error:', e);
       }
+    },
+    async reloadOnce(cb) {
+      // One-shot fetch for viewers to re-pull latest
+      return new Promise((resolve) => {
+        const unsub = onSnapshot(stateDoc, (snap) => {
+          if (snap.exists()) cb(snap.data());
+          unsub();
+          resolve();
+        });
+      });
     }
   };
   window.dispatchEvent(new Event('firestore-ready'));
@@ -400,7 +418,11 @@ tr:hover td { background: #f8f9fa; }
   <header v-if="authenticated" class="app-header">
     <h1>
       {{ t('2026 提成计算器', '2026 Commission Calculator') }}
-      <span :title="cloudStatus" style="font-size:12px;font-weight:400;margin-left:10px;opacity:0.9">
+      <span style="font-size:12px;font-weight:500;margin-left:10px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.22)">
+        <span v-if="isEditorMode">✏️ {{ t('编辑模式', 'Editor') }}</span>
+        <span v-else>👁️ {{ t('体验模式 · 改动不保存', 'Sandbox · not saved') }}</span>
+      </span>
+      <span :title="cloudStatus" style="font-size:12px;font-weight:400;margin-left:8px;opacity:0.9">
         <span v-if="cloudStatus === 'synced'">☁️ {{ t('已同步', 'Synced') }}</span>
         <span v-else-if="cloudStatus === 'syncing'">⏳ {{ t('同步中…', 'Syncing…') }}</span>
         <span v-else-if="cloudStatus === 'offline'">⚠️ {{ t('离线', 'Offline') }}</span>
@@ -408,6 +430,7 @@ tr:hover td { background: #f8f9fa; }
       </span>
     </h1>
     <div class="header-actions">
+      <button v-if="!isEditorMode" @click="reloadFromCloud" :title="t('从云端重新加载最新数据（丢弃本地改动）', 'Reload latest from cloud (discard local changes)')">🔄 {{ t('重载云端', 'Reload cloud') }}</button>
       <button class="lang-toggle" @click="lang = lang === 'zh' ? 'en' : 'zh'">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
       <button @click="saveToFile">{{ t('备份', 'Backup') }}</button>
       <label>{{ t('导入', 'Import') }}<input type="file" class="hidden-input" accept=".json" @change="loadFromFile"></label>
@@ -1219,6 +1242,7 @@ const app = createApp({
     let saveTimeout;
     let applyingRemote = false;        // true while we are applying a remote snapshot — prevents write-loop
     const cloudStatus = ref('local');  // 'local' | 'syncing' | 'synced' | 'offline'
+    const isEditorMode = ref(false);   // true only if URL has ?edit=<secret>
     function autoSave() {
       clearTimeout(saveTimeout);
       saveTimeout = setTimeout(() => {
@@ -1282,23 +1306,50 @@ const app = createApp({
       } catch(e) {}
       selfTest();
 
-      // Subscribe to cloud updates — remote snapshot always wins on initial load
+      // Subscribe to cloud updates
+      // - Editor mode: keep live subscription (real-time sync across editor's tabs)
+      // - Viewer mode: load once, then stay in local sandbox (their edits don't affect anyone)
       function startCloudSync() {
         if (!window.__firestore || !window.__firestore.ready) return false;
+        isEditorMode.value = !!window.__firestore.isEditor;
         cloudStatus.value = 'syncing';
-        window.__firestore.subscribe((remoteState) => {
-          applyingRemote = true;
-          loadState(remoteState);
-          cloudStatus.value = 'synced';
-          // release the flag after Vue reactivity finishes so our watcher sees applyingRemote=true
-          setTimeout(() => { applyingRemote = false; }, 100);
-        });
+        if (isEditorMode.value) {
+          window.__firestore.subscribe((remoteState) => {
+            applyingRemote = true;
+            loadState(remoteState);
+            cloudStatus.value = 'synced';
+            setTimeout(() => { applyingRemote = false; }, 100);
+          });
+        } else {
+          // Viewer: one-shot load, then unsubscribe
+          window.__firestore.reloadOnce((remoteState) => {
+            applyingRemote = true;
+            loadState(remoteState);
+            cloudStatus.value = 'synced';
+            setTimeout(() => { applyingRemote = false; }, 100);
+          });
+        }
         return true;
       }
       if (!startCloudSync()) {
         window.addEventListener('firestore-ready', startCloudSync, { once: true });
       }
     });
+
+    // Viewer-only: re-pull latest cloud data, wiping local tinkering
+    function reloadFromCloud() {
+      if (!window.__firestore || !window.__firestore.ready) return;
+      if (!confirm(lang.value === 'zh'
+        ? '确定从云端重新加载最新数据？你当前的本地改动将被丢弃。'
+        : 'Reload latest data from cloud? Your local changes will be discarded.')) return;
+      cloudStatus.value = 'syncing';
+      window.__firestore.reloadOnce((remoteState) => {
+        applyingRemote = true;
+        loadState(remoteState);
+        cloudStatus.value = 'synced';
+        setTimeout(() => { applyingRemote = false; }, 100);
+      });
+    }
 
     function selfTest() {
       const emily = teams[0].members[0];
@@ -1624,7 +1675,7 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       ytdActualCommission, ytdAccountTeamComm, ytdBdTeamComm, grandAnnualTarget,
       accountTeamCommQ, bdTeamCommQ, allCommissionQ,
       memberCommQ, memberCommYTD,
-      cloudStatus,
+      cloudStatus, isEditorMode, reloadFromCloud,
     };
   }
 });
