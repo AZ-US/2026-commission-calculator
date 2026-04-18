@@ -495,10 +495,10 @@ tr:hover td { background: #f8f9fa; }
               </tr>
               <tr style="font-weight:700;border-top:2px solid #e67700;background:#fffaf5">
                 <td>{{ t('全年合计', 'Annual Total') }}</td>
-                <td>{{ fmtCurrency(bdDirector?.revenueTarget || 0) }}</td>
+                <td>{{ fmtCurrency(bdAnnualTarget) }}</td>
                 <td style="background:#fff3e0">{{ fmtCurrency(ytdBdActual) }}</td>
-                <td :style="(bdDirector?.revenueTarget || 0) > 0 && ytdBdActual/(bdDirector?.revenueTarget||1) >= 1 ? 'color:#34a853' : ytdBdActual > 0 ? 'color:#fbbc04' : ''">
-                  {{ ytdBdActual > 0 && (bdDirector?.revenueTarget||0) > 0 ? fmtPct(ytdBdActual/(bdDirector.revenueTarget)) : '—' }}
+                <td :style="bdAnnualTarget > 0 && ytdBdActual/bdAnnualTarget >= 1 ? 'color:#34a853' : ytdBdActual > 0 ? 'color:#fbbc04' : ''">
+                  {{ ytdBdActual > 0 && bdAnnualTarget > 0 ? fmtPct(ytdBdActual/bdAnnualTarget) : '—' }}
                 </td>
                 <td style="color:var(--text-secondary)">
                   {{ ytdActualRevenue > 0 ? fmtPct(ytdBdActual/ytdActualRevenue) : '—' }}
@@ -1014,6 +1014,7 @@ const app = createApp({
     function bdQActual(qi) { return (bdDirector.value?.quarterlyActual || [])[qi] || 0; }
     function bdQAttainment(qi) { const t = bdQTarget(qi); return t > 0 ? bdQActual(qi) / t : 0; }
     const ytdBdActual      = computed(() => [0,1,2,3].reduce((s, qi) => s + bdQActual(qi), 0));
+    const bdAnnualTarget   = computed(() => bdDirector.value?.revenueTarget || 0);
 
     // Total commission earned = sum of all individuals (each earns separately)
     function allCommissionQ(qi) {
@@ -1336,7 +1337,7 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       memberActualQ, memberActualYTD,
       accountQTarget, accountQActual, accountQAttainment,
       bdQTarget, bdQActual, bdQAttainment,
-      ytdActualRevenue, ytdAttainment, ytdBdActual,
+      ytdActualRevenue, ytdAttainment, ytdBdActual, bdAnnualTarget,
       ytdActualCommission, grandAnnualTarget,
       allCommissionQ,
     };
