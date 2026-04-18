@@ -907,8 +907,8 @@ tr:hover td { background: #f8f9fa; }
       </table>
     </div>
   </div>
-  <div style="text-align:center;padding:12px 0 20px;font-size:11px;color:#bbb;">
-    Amy Zhou 编制 &nbsp;·&nbsp; 2026
+  <div v-if="authenticated" style="text-align:center;padding:12px 0 20px;font-size:11px;color:#bbb;">
+    {{ t('Amy Zhou 编制', 'Prepared by Amy Zhou') }} &nbsp;·&nbsp; 2026
   </div>
 </div>
 
