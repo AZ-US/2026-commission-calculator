@@ -455,7 +455,7 @@ tr:hover td { background: #f8f9fa; }
                   <input type="text" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;color:#333"
                          :placeholder="t('粘贴链接或输入备注…', 'Paste URL or notes…')"
                          :value="accountDirector?.quarterlyNotes?.[qi-1] || ''"
-                         @input="if(accountDirector) accountDirector.quarterlyNotes[qi-1] = $event.target.value">
+                         @input="accountDirector && (accountDirector.quarterlyNotes[qi-1] = $event.target.value)">
                   <a v-if="accountDirector?.quarterlyNotes?.[qi-1]?.startsWith('http')"
                      :href="accountDirector.quarterlyNotes[qi-1]" target="_blank"
                      style="font-size:11px;color:#1a73e8;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">
@@ -514,7 +514,7 @@ tr:hover td { background: #f8f9fa; }
                   <input type="text" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;color:#333"
                          :placeholder="t('粘贴链接或输入备注…', 'Paste URL or notes…')"
                          :value="bdDirector?.quarterlyNotes?.[qi-1] || ''"
-                         @input="if(bdDirector) bdDirector.quarterlyNotes[qi-1] = $event.target.value">
+                         @input="bdDirector && (bdDirector.quarterlyNotes[qi-1] = $event.target.value)">
                   <a v-if="bdDirector?.quarterlyNotes?.[qi-1]?.startsWith('http')"
                      :href="bdDirector.quarterlyNotes[qi-1]" target="_blank"
                      style="font-size:11px;color:#1a73e8;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">
