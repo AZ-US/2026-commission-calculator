@@ -529,6 +529,7 @@ tr:hover td { background: #f8f9fa; }
                 <th class="scenario-match">Q3</th>
                 <th class="scenario-match">Q4</th>
                 <th style="background:#e8f0fe;font-weight:700">{{ t('全年合计', 'Annual Total') }}</th>
+                <th style="font-size:11px;color:var(--text-secondary)">{{ t('录入状态', 'Input Status') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -536,14 +537,24 @@ tr:hover td { background: #f8f9fa; }
                 <tr v-for="m in team.members" :key="m.id" @click="activeTab = m.id" style="cursor:pointer">
                   <td><strong>{{ m.name }}</strong></td>
                   <td><span class="team-badge" :class="'team-'+team.key">{{ team.key.toUpperCase() }}</span></td>
-                  <td v-for="qi in 4" :key="qi">{{ fmtCurrency(memberCommQ(m, qi-1)) }}</td>
+                  <td v-for="qi in 4" :key="qi"
+                      :style="(m.quarterlyActual[qi-1] > 0) ? 'background:#e8f5e9;font-weight:600' : 'color:#aaa'">
+                    {{ fmtCurrency(memberCommQ(m, qi-1)) }}
+                  </td>
                   <td style="font-weight:700;color:var(--primary)">{{ fmtCurrency(memberCommYTD(m)) }}</td>
+                  <td style="font-size:12px;white-space:nowrap">
+                    <span v-for="qi in 4" :key="'s'+qi"
+                          :style="m.quarterlyActual[qi-1] > 0 ? 'color:#34a853;margin-right:2px' : 'color:#ddd;margin-right:2px'">
+                      Q{{ qi }}{{ m.quarterlyActual[qi-1] > 0 ? '✓' : '○' }}
+                    </span>
+                  </td>
                 </tr>
               </template>
               <tr style="font-weight:700;border-top:2px solid var(--primary);background:#f8f9fa">
                 <td colspan="2">{{ t('合计', 'Total') }}</td>
                 <td v-for="qi in 4" :key="'tot'+qi">{{ fmtCurrency(allCommissionQ(qi-1)) }}</td>
                 <td style="font-weight:700;color:var(--primary)">{{ fmtCurrency(ytdActualCommission) }}</td>
+                <td></td>
               </tr>
             </tbody>
           </table>
