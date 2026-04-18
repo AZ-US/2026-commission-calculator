@@ -432,7 +432,7 @@ tr:hover td { background: #f8f9fa; }
                 <th>{{ t('季度目标', 'Q Target') }}</th>
                 <th style="background:#e8f5e9">{{ t('Emily 输入的实际收入', 'Actual Revenue (Emily)') }}</th>
                 <th>{{ t('完成率', 'Attainment') }}</th>
-                <th>{{ t('全团队提成合计', 'All-Team Commission') }}</th>
+                <th>{{ t('Account 团队提成小计', 'Account Team Commission') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -447,7 +447,7 @@ tr:hover td { background: #f8f9fa; }
                   </span>
                   <span v-else style="color:var(--text-secondary)">—</span>
                 </td>
-                <td style="font-weight:700">{{ fmtCurrency(allCommissionQ(qi-1)) }}</td>
+                <td style="font-weight:700">{{ fmtCurrency(accountTeamCommQ(qi-1)) }}</td>
               </tr>
               <tr style="font-weight:700;border-top:2px solid var(--primary);background:#f8f9fa">
                 <td>{{ t('全年合计', 'Annual Total') }}</td>
@@ -456,7 +456,7 @@ tr:hover td { background: #f8f9fa; }
                 <td :style="ytdAttainment >= 1 ? 'color:#34a853' : ytdAttainment >= 0.86 ? 'color:#fbbc04' : ytdActualRevenue > 0 ? 'color:#ea4335' : ''">
                   {{ ytdActualRevenue > 0 ? fmtPct(ytdAttainment) : '—' }}
                 </td>
-                <td style="font-weight:700;color:var(--primary)">{{ fmtCurrency(ytdActualCommission) }}</td>
+                <td style="font-weight:700;color:var(--primary)">{{ fmtCurrency(ytdAccountTeamComm) }}</td>
               </tr>
             </tbody>
           </table>
@@ -475,6 +475,7 @@ tr:hover td { background: #f8f9fa; }
                 <th style="background:#fff3e0">{{ t('Jonathan 输入的 BD 收入', 'BD Actual Revenue (Jonathan)') }}</th>
                 <th>{{ t('BD 完成率', 'BD Attainment') }}</th>
                 <th>{{ t('BD 占 Account %', 'BD % of Account') }}</th>
+                <th>{{ t('BD 团队提成小计', 'BD Team Commission') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -492,6 +493,7 @@ tr:hover td { background: #f8f9fa; }
                 <td style="color:var(--text-secondary)">
                   {{ accountQActual(qi-1) > 0 ? fmtPct(bdQActual(qi-1) / accountQActual(qi-1)) : '—' }}
                 </td>
+                <td style="font-weight:700">{{ fmtCurrency(bdTeamCommQ(qi-1)) }}</td>
               </tr>
               <tr style="font-weight:700;border-top:2px solid #e67700;background:#fffaf5">
                 <td>{{ t('全年合计', 'Annual Total') }}</td>
@@ -503,6 +505,45 @@ tr:hover td { background: #f8f9fa; }
                 <td style="color:var(--text-secondary)">
                   {{ ytdActualRevenue > 0 ? fmtPct(ytdBdActual/ytdActualRevenue) : '—' }}
                 </td>
+                <td style="font-weight:700;color:#e67700">{{ fmtCurrency(ytdBdTeamComm) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- All-Team Commission Summary -->
+      <div class="card">
+        <div class="card-title">💰 {{ t('全团队实际提成汇总 All-Team Commission Summary', 'All-Team Commission Summary') }}</div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">
+          {{ t('基于各员工页面输入的实际季度收入计算，未输入则显示 $0', 'Calculated from actual revenue entered in each employee tab; shows $0 if not yet entered') }}
+        </p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('姓名', 'Name') }}</th>
+                <th>{{ t('团队', 'Team') }}</th>
+                <th class="scenario-match">Q1</th>
+                <th class="scenario-match">Q2</th>
+                <th class="scenario-match">Q3</th>
+                <th class="scenario-match">Q4</th>
+                <th style="background:#e8f0fe;font-weight:700">{{ t('全年合计', 'Annual Total') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="team in teams" :key="team.key">
+                <tr v-for="m in team.members" :key="m.id" @click="activeTab = m.id" style="cursor:pointer">
+                  <td><strong>{{ m.name }}</strong></td>
+                  <td><span class="team-badge" :class="'team-'+team.key">{{ team.key.toUpperCase() }}</span></td>
+                  <td v-for="qi in 4" :key="qi">{{ fmtCurrency(memberCommQ(m, qi-1)) }}</td>
+                  <td style="font-weight:700;color:var(--primary)">{{ fmtCurrency(memberCommYTD(m)) }}</td>
+                </tr>
+              </template>
+              <tr style="font-weight:700;border-top:2px solid var(--primary);background:#f8f9fa">
+                <td colspan="2">{{ t('合计', 'Total') }}</td>
+                <td v-for="qi in 4" :key="'tot'+qi">{{ fmtCurrency(allCommissionQ(qi-1)) }}</td>
+                <td style="font-weight:700;color:var(--primary)">{{ fmtCurrency(ytdActualCommission) }}</td>
               </tr>
             </tbody>
           </table>
@@ -1016,11 +1057,23 @@ const app = createApp({
     const ytdBdActual      = computed(() => [0,1,2,3].reduce((s, qi) => s + bdQActual(qi), 0));
     const bdAnnualTarget   = computed(() => bdDirector.value?.revenueTarget || 0);
 
-    // Total commission earned = sum of all individuals (each earns separately)
-    function allCommissionQ(qi) {
-      return allMembers.value.reduce((s, m) => s + calcActualQuarter(m, qi, quarterlyWeights).commission, 0);
+    // Commission by team per quarter
+    function accountTeamCommQ(qi) {
+      return teams[0].members.reduce((s, m) => s + calcActualQuarter(m, qi, quarterlyWeights).commission, 0);
     }
-    const ytdActualCommission = computed(() => [0,1,2,3].reduce((s, qi) => s + allCommissionQ(qi), 0));
+    function bdTeamCommQ(qi) {
+      return teams[1].members.reduce((s, m) => s + calcActualQuarter(m, qi, quarterlyWeights).commission, 0);
+    }
+    function allCommissionQ(qi) {
+      return accountTeamCommQ(qi) + bdTeamCommQ(qi);
+    }
+    const ytdActualCommission    = computed(() => [0,1,2,3].reduce((s, qi) => s + allCommissionQ(qi), 0));
+    const ytdAccountTeamComm     = computed(() => [0,1,2,3].reduce((s, qi) => s + accountTeamCommQ(qi), 0));
+    const ytdBdTeamComm          = computed(() => [0,1,2,3].reduce((s, qi) => s + bdTeamCommQ(qi), 0));
+
+    // Per-member actual commission by quarter (for all-team table)
+    function memberCommQ(m, qi) { return calcActualQuarter(m, qi, quarterlyWeights).commission; }
+    function memberCommYTD(m)   { return [0,1,2,3].reduce((s, qi) => s + memberCommQ(m, qi), 0); }
 
     // Per-member actual YTD helper for template
     function memberActualYTD(m) { return calcActualYTD(m, quarterlyWeights); }
@@ -1338,8 +1391,9 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       accountQTarget, accountQActual, accountQAttainment,
       bdQTarget, bdQActual, bdQAttainment,
       ytdActualRevenue, ytdAttainment, ytdBdActual, bdAnnualTarget,
-      ytdActualCommission, grandAnnualTarget,
-      allCommissionQ,
+      ytdActualCommission, ytdAccountTeamComm, ytdBdTeamComm, grandAnnualTarget,
+      accountTeamCommQ, bdTeamCommQ, allCommissionQ,
+      memberCommQ, memberCommYTD,
     };
   }
 });
