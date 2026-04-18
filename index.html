@@ -1134,52 +1134,45 @@ const app = createApp({
 
     // ── Undo / Redo ────────────────────────────────────────────────────────
     const MAX_HISTORY = 50;
-    const historyStack = [];
+    const historyStack = ref([]);   // reactive so canRedo updates correctly
     const historyIndex = ref(-1);
     let historyPaused = false;
+    let historyDebounce;
 
     function captureSnapshot() {
-      return JSON.stringify({ teams, scenarios, quarterlyWeights: [...quarterlyWeights], customAttainment: customAttainment.value });
+      try {
+        // Deep-clone via getState() to avoid serializing Vue proxies directly
+        return JSON.stringify(getState());
+      } catch(e) { return null; }
     }
 
     function pushHistory() {
       if (historyPaused) return;
       const snap = captureSnapshot();
-      // Don't push duplicate
-      if (historyStack[historyIndex.value] === snap) return;
-      // Truncate redo branch
-      historyStack.splice(historyIndex.value + 1);
-      historyStack.push(snap);
-      if (historyStack.length > MAX_HISTORY) historyStack.shift();
-      historyIndex.value = historyStack.length - 1;
+      if (!snap) return;
+      if (historyStack.value[historyIndex.value] === snap) return;
+      historyStack.value.splice(historyIndex.value + 1);
+      historyStack.value.push(snap);
+      if (historyStack.value.length > MAX_HISTORY) historyStack.value.shift();
+      historyIndex.value = historyStack.value.length - 1;
     }
 
     function applySnapshot(snap) {
+      if (!snap) return;
       historyPaused = true;
-      const state = JSON.parse(snap);
-      state.teams.forEach((st, ti) => {
-        if (!teams[ti]) return;
-        st.members.forEach((sm, mi) => {
-          const target = teams[ti].members[mi];
-          if (!target) return;
-          Object.assign(target, sm);
-          if (sm.quarterlyActual) sm.quarterlyActual.forEach((v, i) => { target.quarterlyActual[i] = v; });
-          if (sm.quarterlyNotes && target.quarterlyNotes) sm.quarterlyNotes.forEach((v, i) => { target.quarterlyNotes[i] = v; });
-        });
-      });
-      state.scenarios.forEach((s, i) => { if (scenarios[i]) Object.assign(scenarios[i], s); });
-      state.quarterlyWeights.forEach((v, i) => { quarterlyWeights[i] = v; });
-      customAttainment.value = state.customAttainment;
+      try {
+        const state = JSON.parse(snap);
+        loadState(state);
+      } catch(e) {}
       historyPaused = false;
     }
 
     const canUndo = computed(() => historyIndex.value > 0);
-    const canRedo = computed(() => historyIndex.value < historyStack.length - 1);
+    const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1);
 
-    function undo() { if (!canUndo.value) return; historyIndex.value--; applySnapshot(historyStack[historyIndex.value]); }
-    function redo() { if (!canRedo.value) return; historyIndex.value++; applySnapshot(historyStack[historyIndex.value]); }
+    function undo() { if (!canUndo.value) return; historyIndex.value--; applySnapshot(historyStack.value[historyIndex.value]); }
+    function redo() { if (!canRedo.value) return; historyIndex.value++; applySnapshot(historyStack.value[historyIndex.value]); }
 
-    let historyDebounce;
     watch([teams, scenarios, quarterlyWeights, customAttainment], () => {
       if (historyPaused) return;
       clearTimeout(historyDebounce);
@@ -1295,7 +1288,7 @@ const app = createApp({
       } catch(e) {}
       selfTest();
       // Init history with current state
-      Vue.nextTick(() => pushHistory());
+      setTimeout(() => pushHistory(), 100);
       // Keyboard shortcuts
       window.addEventListener('keydown', handleKeydown);
     });
