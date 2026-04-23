@@ -1003,7 +1003,7 @@ tr:hover td { background: #f8f9fa; }
                         <div style="display:flex;align-items:center;gap:4px">
                           <span>$</span>
                           <input class="editable-input" type="text" inputmode="numeric" style="width:140px;background:#e8f5e9"
-                                 :value="fmtInt(m.quarterlyActual[qi-1])"
+                                 :value="fmtIntNoZero(m.quarterlyActual[qi-1])"
                                  @input="m.quarterlyActual[qi-1] = parseNumInput($event.target.value)"
                                  @focus="$event.target.select()"
                                  placeholder="0">
@@ -1228,6 +1228,11 @@ const app = createApp({
     // Number input formatting — shows 63,236,128 while the underlying state is a plain number
     function fmtInt(n) {
       if (n === null || n === undefined || n === '' || isNaN(n)) return '';
+      return Number(n).toLocaleString('en-US');
+    }
+    // Same as fmtInt but returns '' for zero (so placeholder shows through)
+    function fmtIntNoZero(n) {
+      if (!n || isNaN(n)) return '';
       return Number(n).toLocaleString('en-US');
     }
     // Parse a user-typed value like "63,236,128" or "63236128" back into a number
@@ -1845,7 +1850,7 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
     return {
       authenticated, passwordInput, loginError, doLogin,
       lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
-      t, fmtCurrency, fmtPct, fmtInt, parseNumInput, calcResult, customResult,
+      t, fmtCurrency, fmtPct, fmtInt, fmtIntNoZero, parseNumInput, calcResult, customResult,
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
       weightWarning, scenarioClass, exportEmployee,
       exportMemberExcel, exportAllExcel,
