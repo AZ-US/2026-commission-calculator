@@ -887,7 +887,10 @@ tr:hover td { background: #f8f9fa; }
                   <span class="param-label">{{ t('底薪 Base Salary', 'Base Salary') }}</span>
                   <div style="display:flex;align-items:center;gap:4px">
                     <span>$</span>
-                    <input class="editable-input" type="number" v-model.number="m.baseSalary">
+                    <input class="editable-input" type="text" inputmode="numeric"
+                           :value="fmtInt(m.baseSalary)"
+                           @input="m.baseSalary = parseNumInput($event.target.value)"
+                           @focus="$event.target.select()">
                   </div>
                 </div>
                 <div class="param-item">
@@ -903,14 +906,20 @@ tr:hover td { background: #f8f9fa; }
                   <span class="param-label">{{ m.role === 'director' ? t('团队收入目标', 'Team Revenue Target') : t('个人收入目标', 'Revenue Quota') }}</span>
                   <div style="display:flex;align-items:center;gap:4px">
                     <span>$</span>
-                    <input class="editable-input" type="number" v-model.number="m.revenueTarget" style="width:160px">
+                    <input class="editable-input" type="text" inputmode="numeric" style="width:160px"
+                           :value="fmtInt(m.revenueTarget)"
+                           @input="m.revenueTarget = parseNumInput($event.target.value)"
+                           @focus="$event.target.select()">
                   </div>
                 </div>
                 <div class="param-item" v-if="m.ref2025Commission !== undefined">
                   <span class="param-label">{{ t('2025年提成参考', '2025 Commission Ref') }}</span>
                   <div style="display:flex;align-items:center;gap:4px">
                     <span>$</span>
-                    <input class="editable-input" type="number" v-model.number="m.ref2025Commission">
+                    <input class="editable-input" type="text" inputmode="numeric"
+                           :value="fmtInt(m.ref2025Commission)"
+                           @input="m.ref2025Commission = parseNumInput($event.target.value)"
+                           @focus="$event.target.select()">
                   </div>
                 </div>
               </div>
@@ -993,9 +1002,10 @@ tr:hover td { background: #f8f9fa; }
                       <td style="background:#f1f8f1">
                         <div style="display:flex;align-items:center;gap:4px">
                           <span>$</span>
-                          <input class="editable-input" type="number" min="0" style="width:140px;background:#e8f5e9"
-                                 :value="m.quarterlyActual[qi-1]"
-                                 @input="m.quarterlyActual[qi-1] = parseFloat($event.target.value) || 0"
+                          <input class="editable-input" type="text" inputmode="numeric" style="width:140px;background:#e8f5e9"
+                                 :value="fmtInt(m.quarterlyActual[qi-1])"
+                                 @input="m.quarterlyActual[qi-1] = parseNumInput($event.target.value)"
+                                 @focus="$event.target.select()"
                                  placeholder="0">
                         </div>
                       </td>
@@ -1215,6 +1225,18 @@ const app = createApp({
     const currencyFmtDetail = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
     function fmtCurrency(n) { return Math.abs(n) >= 10000 ? currencyFmt.format(n) : currencyFmtDetail.format(n); }
     function fmtPct(n) { return (n * 100).toFixed(2) + '%'; }
+    // Number input formatting — shows 63,236,128 while the underlying state is a plain number
+    function fmtInt(n) {
+      if (n === null || n === undefined || n === '' || isNaN(n)) return '';
+      return Number(n).toLocaleString('en-US');
+    }
+    // Parse a user-typed value like "63,236,128" or "63236128" back into a number
+    function parseNumInput(v) {
+      if (v === null || v === undefined) return 0;
+      const cleaned = String(v).replace(/[^\d.-]/g, '');
+      const n = parseFloat(cleaned);
+      return isNaN(n) ? 0 : n;
+    }
 
     function calcResult(member, scenarioIndex) {
       return calcCommission(member, scenarios[scenarioIndex].attainment, quarterlyWeights);
@@ -1823,7 +1845,7 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
     return {
       authenticated, passwordInput, loginError, doLogin,
       lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
-      t, fmtCurrency, fmtPct, calcResult, customResult,
+      t, fmtCurrency, fmtPct, fmtInt, parseNumInput, calcResult, customResult,
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
       weightWarning, scenarioClass, exportEmployee,
       exportMemberExcel, exportAllExcel,
