@@ -10,6 +10,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
   const firebaseConfig = {
     apiKey: "AIzaSyB2ft9H5rdZvMKU8P62COYjyNlp_Tglfts",
     authDomain: "commission-calculator-dd155.firebaseapp.com",
@@ -51,6 +52,27 @@
           unsub();
           resolve();
         });
+      });
+    },
+    // Upload a file to Firebase Storage. onProgress(0-1) optional.
+    async uploadFile(file, pathHint, onProgress) {
+      if (!isEditor) throw new Error("Only editors can upload files");
+      const storage = getStorage(fbApp);
+      const safeName = (file.name || 'upload').replace(/[^\w.\-]/g, '_');
+      const path = `uploads/${pathHint || 'misc'}/${Date.now()}_${safeName}`;
+      const ref = storageRef(storage, path);
+      const task = uploadBytesResumable(ref, file);
+      return new Promise((resolve, reject) => {
+        task.on('state_changed',
+          (snap) => { if (onProgress) onProgress(snap.bytesTransferred / snap.totalBytes); },
+          reject,
+          async () => {
+            try {
+              const url = await getDownloadURL(task.snapshot.ref);
+              resolve({ url, name: file.name, size: file.size });
+            } catch (e) { reject(e); }
+          }
+        );
       });
     }
   };
@@ -518,15 +540,25 @@ tr:hover td { background: #f8f9fa; }
                 </td>
                 <td style="font-weight:700">{{ fmtCurrency(accountTeamCommQ(qi-1)) }}</td>
                 <td>
-                  <input type="text" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;color:#333"
-                         :placeholder="t('粘贴链接或输入备注…', 'Paste URL or notes…')"
-                         :value="accountDirector?.quarterlyNotes?.[qi-1] || ''"
-                         @input="accountDirector && (accountDirector.quarterlyNotes[qi-1] = $event.target.value)">
+                  <div style="display:flex;gap:4px;align-items:center">
+                    <input type="text" style="flex:1;min-width:0;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;color:#333"
+                           :placeholder="t('粘贴链接或上传文件…', 'Paste URL or upload file…')"
+                           :value="accountDirector?.quarterlyNotes?.[qi-1] || ''"
+                           @input="accountDirector && (accountDirector.quarterlyNotes[qi-1] = $event.target.value)">
+                    <label v-if="isEditorMode" style="cursor:pointer;background:#e8f0fe;border:1px solid #1a73e8;color:#1a73e8;padding:3px 8px;border-radius:4px;font-size:11px;white-space:nowrap" :title="t('上传文件 (Excel/PDF/图片)', 'Upload file (Excel/PDF/Image)')">
+                      📎
+                      <input type="file" style="display:none" :id="'up-acct-q'+qi"
+                             @change="uploadFileToNote($event.target.files[0], 'account', qi-1, accountDirector); $event.target.value=''">
+                    </label>
+                  </div>
+                  <div v-if="uploadProgress('account', qi-1, accountDirector?.id) !== undefined" style="font-size:11px;color:#1a73e8;margin-top:2px">
+                    ⏳ {{ Math.round(uploadProgress('account', qi-1, accountDirector?.id) * 100) }}%
+                  </div>
                   <a v-if="/^https?:\/\//i.test(accountDirector?.quarterlyNotes?.[qi-1] || '')"
                      :href="accountDirector.quarterlyNotes[qi-1]" target="_blank" rel="noopener noreferrer"
                      :title="accountDirector.quarterlyNotes[qi-1]"
                      style="font-size:11px;color:#1a73e8;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">
-                    🔗 {{ t('打开链接', 'Open link') }}
+                    🔗 {{ t('打开链接 / 文件', 'Open link / file') }}
                   </a>
                 </td>
               </tr>
@@ -580,15 +612,25 @@ tr:hover td { background: #f8f9fa; }
                 </td>
                 <td style="font-weight:700">{{ fmtCurrency(bdTeamCommQ(qi-1)) }}</td>
                 <td>
-                  <input type="text" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;color:#333"
-                         :placeholder="t('粘贴链接或输入备注…', 'Paste URL or notes…')"
-                         :value="bdDirector?.quarterlyNotes?.[qi-1] || ''"
-                         @input="bdDirector && (bdDirector.quarterlyNotes[qi-1] = $event.target.value)">
+                  <div style="display:flex;gap:4px;align-items:center">
+                    <input type="text" style="flex:1;min-width:0;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;color:#333"
+                           :placeholder="t('粘贴链接或上传文件…', 'Paste URL or upload file…')"
+                           :value="bdDirector?.quarterlyNotes?.[qi-1] || ''"
+                           @input="bdDirector && (bdDirector.quarterlyNotes[qi-1] = $event.target.value)">
+                    <label v-if="isEditorMode" style="cursor:pointer;background:#fff3e0;border:1px solid #e67700;color:#e67700;padding:3px 8px;border-radius:4px;font-size:11px;white-space:nowrap">
+                      📎
+                      <input type="file" style="display:none"
+                             @change="uploadFileToNote($event.target.files[0], 'bd', qi-1, bdDirector); $event.target.value=''">
+                    </label>
+                  </div>
+                  <div v-if="uploadProgress('bd', qi-1, bdDirector?.id) !== undefined" style="font-size:11px;color:#e67700;margin-top:2px">
+                    ⏳ {{ Math.round(uploadProgress('bd', qi-1, bdDirector?.id) * 100) }}%
+                  </div>
                   <a v-if="/^https?:\/\//i.test(bdDirector?.quarterlyNotes?.[qi-1] || '')"
                      :href="bdDirector.quarterlyNotes[qi-1]" target="_blank" rel="noopener noreferrer"
                      :title="bdDirector.quarterlyNotes[qi-1]"
                      style="font-size:11px;color:#1a73e8;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">
-                    🔗 {{ t('打开链接', 'Open link') }}
+                    🔗 {{ t('打开链接 / 文件', 'Open link / file') }}
                   </a>
                 </td>
               </tr>
@@ -1479,6 +1521,36 @@ const app = createApp({
       }
     });
 
+    // File upload (editors only) — upload to Firebase Storage, write the URL into the note field
+    const uploadingState = reactive({});  // key: 'account-q0', value: 0..1 progress
+    async function uploadFileToNote(file, kind, qi, member) {
+      if (!file) return;
+      if (!window.__firestore?.isEditor) {
+        alert(lang.value === 'zh' ? '只有编辑模式可以上传文件' : 'Only editor mode can upload files');
+        return;
+      }
+      const key = `${kind}-q${qi}-${member?.id || ''}`;
+      uploadingState[key] = 0.01;
+      try {
+        const result = await window.__firestore.uploadFile(file, `${kind}/q${qi+1}`, (p) => {
+          uploadingState[key] = p;
+        });
+        // Write URL into the corresponding notes slot
+        if (member && member.quarterlyNotes) {
+          member.quarterlyNotes[qi] = result.url;
+        }
+        uploadingState[key] = 1;
+        setTimeout(() => { delete uploadingState[key]; }, 1000);
+      } catch (e) {
+        console.error('[Upload] error', e);
+        alert((lang.value === 'zh' ? '上传失败：' : 'Upload failed: ') + (e.message || e));
+        delete uploadingState[key];
+      }
+    }
+    function uploadProgress(kind, qi, memberId) {
+      return uploadingState[`${kind}-q${qi}-${memberId || ''}`];
+    }
+
     // Viewer-only: re-pull latest cloud data, wiping local tinkering
     function reloadFromCloud() {
       if (!window.__firestore || !window.__firestore.ready) return;
@@ -1872,6 +1944,7 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       accountTeamCommQ, bdTeamCommQ, allCommissionQ,
       memberCommQ, memberCommYTD,
       cloudStatus, isEditorMode, reloadFromCloud,
+      uploadFileToNote, uploadProgress,
       contributorMembers, contributorQActual, contributorYTD, contributorsTotalYTD,
       accountQActualEmily, accountQActualContributors,
       renderCharts,
