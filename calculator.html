@@ -847,6 +847,24 @@ tr:hover td { background: #f8f9fa; }
       <!-- Export -->
       <div class="card">
         <div class="card-title">{{ t('导出报告 Export Reports', 'Export Reports') }}</div>
+
+        <!-- Quarterly Team Summary -->
+        <div style="background:#e8f0fe;border:1px solid #1a73e8;border-radius:8px;padding:14px;margin-bottom:14px">
+          <div style="font-weight:700;color:#1a73e8;margin-bottom:8px">📊 {{ t('当季全员结果汇总', 'Quarterly Team Summary') }}</div>
+          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">
+            {{ t('一份包含所有员工某季度实际完成的综合报告，可直接用于团队复盘或月度会议。', 'One report covering all employees for a chosen quarter — for team review or monthly meeting.') }}
+          </p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterSummary(0)">📄 Q1 {{ t('总结', 'Summary') }}</button>
+            <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterSummary(1)">📄 Q2 {{ t('总结', 'Summary') }}</button>
+            <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterSummary(2)">📄 Q3 {{ t('总结', 'Summary') }}</button>
+            <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterSummary(3)">📄 Q4 {{ t('总结', 'Summary') }}</button>
+            <button class="export-btn" style="background:#0d904f;color:#fff;border-color:#0d904f" @click="exportQuarterSummary('ytd')">📊 YTD {{ t('全年汇总', 'Year-to-Date') }}</button>
+          </div>
+        </div>
+
+        <!-- Per-employee exports -->
+        <div style="font-weight:600;font-size:13px;margin-bottom:6px;color:var(--text-secondary)">{{ t('单个员工导出', 'Per-Employee Exports') }}</div>
         <div class="export-bar">
           <button class="export-btn" @click="exportEmployee(null)">{{ t('导出全员汇总', 'Export All Summary') }}</button>
           <template v-for="team in teams">
@@ -1792,6 +1810,172 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       return rows;
     }
 
+    // Team-wide quarterly summary — pass qi (0..3) for one quarter, or 'ytd' for full year
+    function exportQuarterSummary(scope) {
+      const isZh = lang.value === 'zh';
+      const isYTD = scope === 'ytd';
+      const qi = isYTD ? null : Number(scope);
+      const qLabel = isYTD ? (isZh?'全年 YTD':'YTD') : `Q${qi+1}`;
+      const dateStr = new Date().toLocaleDateString(isZh ? 'zh-CN' : 'en-US');
+      const allMembers = teams.flatMap(t => t.members);
+      const activeMembers = allMembers.filter(m => m.rate > 0);
+
+      // Compute per-member figures for this scope
+      const rows = activeMembers.map(m => {
+        if (isYTD) {
+          const ytd = memberActualYTD(m);
+          return {
+            name: m.name, role: isZh?m.titleZh:m.titleEn, team: teams.find(t=>t.members.includes(m))?.[isZh?'nameZh':'nameEn'],
+            target: ytd.totalTarget,
+            actual: ytd.totalActual,
+            attainment: ytd.ytdAttainment,
+            multiplier: '—',
+            commission: ytd.totalCommission,
+            entered: ytd.totalActual > 0
+          };
+        } else {
+          const r = memberActualQ(m, qi);
+          return {
+            name: m.name, role: isZh?m.titleZh:m.titleEn, team: teams.find(t=>t.members.includes(m))?.[isZh?'nameZh':'nameEn'],
+            target: r.qTarget,
+            actual: r.actual,
+            attainment: r.attainment,
+            multiplier: r.entered ? '×'+r.multiplier.toFixed(2) : '—',
+            commission: r.commission,
+            entered: r.entered
+          };
+        }
+      });
+
+      const totalTarget = rows.reduce((s,r)=>s+r.target, 0);
+      const totalActual = rows.reduce((s,r)=>s+r.actual, 0);
+      const totalComm = rows.reduce((s,r)=>s+r.commission, 0);
+      const teamAttainment = totalTarget > 0 ? totalActual / totalTarget : 0;
+
+      // Account team-level numbers (using accountQActual which includes contributors)
+      const acctTarget = isYTD ? grandAnnualTarget.value : accountQTarget(qi);
+      const acctActual = isYTD ? ytdActualRevenue.value : accountQActual(qi);
+      const acctAttainment = acctTarget > 0 ? acctActual / acctTarget : 0;
+      const bdTarget = isYTD ? bdAnnualTarget.value : bdQTarget(qi);
+      const bdActual = isYTD ? ytdBdActual.value : bdQActual(qi);
+      const bdAttainment = bdTarget > 0 ? bdActual / bdTarget : 0;
+
+      const title = `${qLabel} ${isZh?'全员提成结果':'Team Commission Summary'} — 2026`;
+
+      const rowsHtml = rows.map(r => `<tr ${r.entered?'':'style="color:#9aa0a6"'}>
+        <td><strong>${r.name}</strong><br><span style="font-size:11px;color:#5f6368">${r.role}</span></td>
+        <td>${r.team}</td>
+        <td>${fmtCurrency(r.target)}</td>
+        <td>${r.entered ? fmtCurrency(r.actual) : '<em>'+(isZh?'未录入':'—')+'</em>'}</td>
+        <td>${r.entered ? fmtPct(r.attainment) : '—'}</td>
+        <td>${r.multiplier}</td>
+        <td style="font-weight:700;color:#1a73e8">${fmtCurrency(r.commission)}</td>
+      </tr>`).join('');
+
+      // Contributors block (Robert / future similar) — only for non-YTD or YTD if any
+      const contribRows = contributorMembers.value.map(m => {
+        const amt = isYTD ? contributorYTD(m) : contributorQActual(m, qi);
+        return amt > 0 ? `<tr><td><strong>${m.name}</strong><br><span style="font-size:11px;color:#5f6368">${isZh?m.titleZh:m.titleEn}</span></td><td>${fmtCurrency(amt)}</td></tr>` : '';
+      }).filter(Boolean).join('');
+
+      const html = `<!DOCTYPE html><html lang="${isZh?'zh-CN':'en'}"><head><meta charset="UTF-8"><title>${title}</title>
+<style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;max-width:980px;margin:32px auto;padding:0 24px;color:#202124;font-size:13px;line-height:1.6}
+.header{border-bottom:3px solid #1a73e8;padding-bottom:10px;margin-bottom:20px}
+h1{font-size:22px;color:#1a73e8;margin:0}
+.meta{color:#5f6368;font-size:12px;margin-top:4px}
+.team-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:24px}
+.team-card{padding:14px 16px;border-radius:8px;border-left:4px solid}
+.team-card.account{background:#e8f0fe;border-color:#1a73e8}
+.team-card.bd{background:#fff3e0;border-color:#e67700}
+.team-card.total{background:#e6f4ea;border-color:#0d904f}
+.team-card .label{font-size:11px;color:#5f6368;text-transform:uppercase;letter-spacing:0.5px}
+.team-card .big{font-size:24px;font-weight:700;margin:4px 0}
+.team-card .sub{font-size:11px;color:#5f6368}
+table{width:100%;border-collapse:collapse;margin:8px 0}
+th,td{padding:8px 10px;border:1px solid #dadce0;text-align:right}
+th{background:#1a73e8;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+.totals-row{background:#e8f0fe;font-weight:700}
+.totals-row td{border-top:2px solid #1a73e8}
+.section-title{font-size:14px;font-weight:600;color:#1a73e8;margin:24px 0 8px}
+.contrib-table th{background:#fff3e0;color:#e67700}
+.footer{margin-top:32px;padding-top:14px;border-top:1px solid #dadce0;font-size:11px;color:#5f6368}
+@media print{body{margin:0;padding:16px}}
+</style></head><body>
+<div class="header">
+  <h1>${title}</h1>
+  <div class="meta">${isZh?'生成日期':'Generated'}: ${dateStr}</div>
+</div>
+
+<div class="team-cards">
+  <div class="team-card account">
+    <div class="label">🏢 ${isZh?'Account 团队':'Account Team'}</div>
+    <div class="big">${fmtPct(acctAttainment)}</div>
+    <div class="sub">${fmtCurrency(acctActual)} / ${fmtCurrency(acctTarget)}</div>
+  </div>
+  <div class="team-card bd">
+    <div class="label">📌 ${isZh?'BD 团队':'BD Team'}</div>
+    <div class="big">${fmtPct(bdAttainment)}</div>
+    <div class="sub">${fmtCurrency(bdActual)} / ${fmtCurrency(bdTarget)}</div>
+  </div>
+  <div class="team-card total">
+    <div class="label">💰 ${isZh?'全员提成总额':'Total Commission'}</div>
+    <div class="big">${fmtCurrency(totalComm)}</div>
+    <div class="sub">${rows.filter(r=>r.entered).length} / ${rows.length} ${isZh?'已录入实际数据':'with actuals entered'}</div>
+  </div>
+</div>
+
+<div class="section-title">${isZh?'各员工明细':'Per-Employee Breakdown'}</div>
+<table>
+  <thead>
+    <tr>
+      <th>${isZh?'姓名 / 职位':'Name / Role'}</th>
+      <th>${isZh?'团队':'Team'}</th>
+      <th>${isZh?'目标':'Target'}</th>
+      <th>${isZh?'实际收入':'Actual'}</th>
+      <th>${isZh?'完成率':'Attainment'}</th>
+      <th>${isZh?'乘数':'Mult'}</th>
+      <th>${isZh?'提成':'Commission'}</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${rowsHtml}
+    <tr class="totals-row">
+      <td colspan="2">${isZh?'合计':'Total'}</td>
+      <td>${fmtCurrency(totalTarget)}</td>
+      <td>${fmtCurrency(totalActual)}</td>
+      <td>${totalActual>0?fmtPct(teamAttainment):'—'}</td>
+      <td>—</td>
+      <td style="color:#1a73e8">${fmtCurrency(totalComm)}</td>
+    </tr>
+  </tbody>
+</table>
+
+${contribRows ? `
+<div class="section-title">🤝 ${isZh?'贡献者收入（不发提成，已计入 Account 完成率）':'Contributor Revenue (counted in Account attainment, no commission)'}</div>
+<table class="contrib-table">
+  <thead><tr><th>${isZh?'姓名 / 职位':'Name / Role'}</th><th>${isZh?'贡献金额':'Contribution'}</th></tr></thead>
+  <tbody>${contribRows}</tbody>
+</table>
+` : ''}
+
+<div class="footer">
+  <strong>${isZh?'提成公式':'Commission Formula'}:</strong> ${isZh?'实际收入 × 提成比例 × Multiplier':'Actual × Rate × Multiplier'}<br>
+  <strong>Multiplier:</strong> ≤86%→×0.80 | 86–104%→×1.00 | 105–119%→×1.10 | ≥120%→×1.20 (${isZh?'封顶':'cap'})<br>
+  <em>${isZh?'本报告为内部参考，最终金额以财务核定为准。':'For internal reference. Final payout subject to finance verification.'}</em>
+</div>
+</body></html>`;
+
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      const fileQ = isYTD ? 'YTD' : `Q${qi+1}`;
+      a.download = `Team_${fileQ}_Summary_${new Date().toISOString().slice(0,10)}.html`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
     // Per-employee quarterly results — clean printable report focused on actuals
     function exportQuarterlyReport(m) {
       const isZh = lang.value === 'zh';
@@ -1966,7 +2150,7 @@ th:first-child,td:first-child{text-align:left}
       lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
       t, fmtCurrency, fmtPct, fmtInt, fmtIntNoZero, parseNumInput, calcResult, customResult,
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
-      weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport,
+      weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary,
       exportMemberExcel, exportAllExcel,
       saveToFile, loadFromFile, resetDefaults,
       memberActualQ, memberActualYTD,
