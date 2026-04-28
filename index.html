@@ -540,20 +540,10 @@ tr:hover td { background: #f8f9fa; }
                 </td>
                 <td style="font-weight:700">{{ fmtCurrency(accountTeamCommQ(qi-1)) }}</td>
                 <td>
-                  <div style="display:flex;gap:4px;align-items:center">
-                    <input type="text" style="flex:1;min-width:0;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;color:#333"
-                           :placeholder="t('粘贴链接或上传文件…', 'Paste URL or upload file…')"
-                           :value="accountDirector?.quarterlyNotes?.[qi-1] || ''"
-                           @input="accountDirector && (accountDirector.quarterlyNotes[qi-1] = $event.target.value)">
-                    <label v-if="isEditorMode" style="cursor:pointer;background:#e8f0fe;border:1px solid #1a73e8;color:#1a73e8;padding:3px 8px;border-radius:4px;font-size:11px;white-space:nowrap" :title="t('上传文件 (Excel/PDF/图片)', 'Upload file (Excel/PDF/Image)')">
-                      📎
-                      <input type="file" style="display:none" :id="'up-acct-q'+qi"
-                             @change="uploadFileToNote($event.target.files[0], 'account', qi-1, accountDirector); $event.target.value=''">
-                    </label>
-                  </div>
-                  <div v-if="uploadProgress('account', qi-1, accountDirector?.id) !== undefined" style="font-size:11px;color:#1a73e8;margin-top:2px">
-                    ⏳ {{ Math.round(uploadProgress('account', qi-1, accountDirector?.id) * 100) }}%
-                  </div>
+                  <input type="text" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;color:#333"
+                         :placeholder="t('粘贴 Google Drive 链接或备注…', 'Paste Google Drive link or notes…')"
+                         :value="accountDirector?.quarterlyNotes?.[qi-1] || ''"
+                         @input="accountDirector && (accountDirector.quarterlyNotes[qi-1] = $event.target.value)">
                   <a v-if="/^https?:\/\//i.test(accountDirector?.quarterlyNotes?.[qi-1] || '')"
                      :href="accountDirector.quarterlyNotes[qi-1]" target="_blank" rel="noopener noreferrer"
                      :title="accountDirector.quarterlyNotes[qi-1]"
@@ -612,20 +602,10 @@ tr:hover td { background: #f8f9fa; }
                 </td>
                 <td style="font-weight:700">{{ fmtCurrency(bdTeamCommQ(qi-1)) }}</td>
                 <td>
-                  <div style="display:flex;gap:4px;align-items:center">
-                    <input type="text" style="flex:1;min-width:0;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;color:#333"
-                           :placeholder="t('粘贴链接或上传文件…', 'Paste URL or upload file…')"
-                           :value="bdDirector?.quarterlyNotes?.[qi-1] || ''"
-                           @input="bdDirector && (bdDirector.quarterlyNotes[qi-1] = $event.target.value)">
-                    <label v-if="isEditorMode" style="cursor:pointer;background:#fff3e0;border:1px solid #e67700;color:#e67700;padding:3px 8px;border-radius:4px;font-size:11px;white-space:nowrap">
-                      📎
-                      <input type="file" style="display:none"
-                             @change="uploadFileToNote($event.target.files[0], 'bd', qi-1, bdDirector); $event.target.value=''">
-                    </label>
-                  </div>
-                  <div v-if="uploadProgress('bd', qi-1, bdDirector?.id) !== undefined" style="font-size:11px;color:#e67700;margin-top:2px">
-                    ⏳ {{ Math.round(uploadProgress('bd', qi-1, bdDirector?.id) * 100) }}%
-                  </div>
+                  <input type="text" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px;color:#333"
+                         :placeholder="t('粘贴 Google Drive 链接或备注…', 'Paste Google Drive link or notes…')"
+                         :value="bdDirector?.quarterlyNotes?.[qi-1] || ''"
+                         @input="bdDirector && (bdDirector.quarterlyNotes[qi-1] = $event.target.value)">
                   <a v-if="/^https?:\/\//i.test(bdDirector?.quarterlyNotes?.[qi-1] || '')"
                      :href="bdDirector.quarterlyNotes[qi-1]" target="_blank" rel="noopener noreferrer"
                      :title="bdDirector.quarterlyNotes[qi-1]"
