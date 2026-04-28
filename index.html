@@ -522,8 +522,9 @@ tr:hover td { background: #f8f9fa; }
                          :placeholder="t('粘贴链接或输入备注…', 'Paste URL or notes…')"
                          :value="accountDirector?.quarterlyNotes?.[qi-1] || ''"
                          @input="accountDirector && (accountDirector.quarterlyNotes[qi-1] = $event.target.value)">
-                  <a v-if="accountDirector?.quarterlyNotes?.[qi-1]?.startsWith('http')"
-                     :href="accountDirector.quarterlyNotes[qi-1]" target="_blank"
+                  <a v-if="/^https?:\/\//i.test(accountDirector?.quarterlyNotes?.[qi-1] || '')"
+                     :href="accountDirector.quarterlyNotes[qi-1]" target="_blank" rel="noopener noreferrer"
+                     :title="accountDirector.quarterlyNotes[qi-1]"
                      style="font-size:11px;color:#1a73e8;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">
                     🔗 {{ t('打开链接', 'Open link') }}
                   </a>
@@ -583,8 +584,9 @@ tr:hover td { background: #f8f9fa; }
                          :placeholder="t('粘贴链接或输入备注…', 'Paste URL or notes…')"
                          :value="bdDirector?.quarterlyNotes?.[qi-1] || ''"
                          @input="bdDirector && (bdDirector.quarterlyNotes[qi-1] = $event.target.value)">
-                  <a v-if="bdDirector?.quarterlyNotes?.[qi-1]?.startsWith('http')"
-                     :href="bdDirector.quarterlyNotes[qi-1]" target="_blank"
+                  <a v-if="/^https?:\/\//i.test(bdDirector?.quarterlyNotes?.[qi-1] || '')"
+                     :href="bdDirector.quarterlyNotes[qi-1]" target="_blank" rel="noopener noreferrer"
+                     :title="bdDirector.quarterlyNotes[qi-1]"
                      style="font-size:11px;color:#1a73e8;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">
                     🔗 {{ t('打开链接', 'Open link') }}
                   </a>
