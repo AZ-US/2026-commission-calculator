@@ -796,28 +796,43 @@ tr:hover td { background: #f8f9fa; }
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:12px">
           <!-- Account team progress -->
           <div style="padding:14px;background:#f8fbff;border-left:4px solid #1a73e8;border-radius:6px">
-            <div style="font-size:12px;color:#5f6368;margin-bottom:4px">🏢 {{ t('Account 团队完成率', 'Account Team Attainment') }}</div>
+            <div style="font-size:12px;color:#5f6368;margin-bottom:4px">🏢 {{ t('Account 团队', 'Account Team') }}</div>
             <div style="font-size:28px;font-weight:700;color:#1a73e8">{{ fmtPct(ytdAttainment) }}</div>
-            <div style="font-size:12px;color:#5f6368;margin-top:2px">{{ fmtCurrency(ytdActualRevenue) }} / {{ fmtCurrency(grandAnnualTarget) }}</div>
-            <div style="height:6px;background:#e8eaed;border-radius:3px;margin-top:8px;overflow:hidden">
+            <div style="font-size:12px;color:#5f6368;margin-top:2px">{{ t('业绩', 'Revenue') }}: {{ fmtCurrency(ytdActualRevenue) }} / {{ fmtCurrency(grandAnnualTarget) }}</div>
+            <div style="height:6px;background:#e8eaed;border-radius:3px;margin-top:6px;overflow:hidden">
               <div :style="`height:100%;width:${Math.min(100, ytdAttainment*100)}%;background:${ytdAttainment>=1?'#34a853':ytdAttainment>=0.86?'#fbbc04':'#ea4335'};transition:width 0.3s`"></div>
+            </div>
+            <div style="font-size:11px;color:#5f6368;margin-top:8px;padding-top:6px;border-top:1px dashed #dadce0">
+              🎁 {{ t('奖金发放', 'Bonus Payout') }}: <strong style="color:#1a73e8">{{ fmtPct(payoutRatioAccount) }}</strong>
+              <span style="opacity:0.7">({{ fmtCurrency(ytdAccountTeamComm) }} / {{ fmtCurrency(targetCommAccount) }})</span>
             </div>
           </div>
           <!-- BD team progress -->
           <div style="padding:14px;background:#fff8f0;border-left:4px solid #e67700;border-radius:6px">
-            <div style="font-size:12px;color:#5f6368;margin-bottom:4px">📌 {{ t('BD 团队完成率', 'BD Team Attainment') }}</div>
+            <div style="font-size:12px;color:#5f6368;margin-bottom:4px">📌 {{ t('BD 团队', 'BD Team') }}</div>
             <div style="font-size:28px;font-weight:700;color:#e67700">{{ bdAnnualTarget > 0 ? fmtPct(ytdBdActual / bdAnnualTarget) : '—' }}</div>
-            <div style="font-size:12px;color:#5f6368;margin-top:2px">{{ fmtCurrency(ytdBdActual) }} / {{ fmtCurrency(bdAnnualTarget) }}</div>
-            <div style="height:6px;background:#e8eaed;border-radius:3px;margin-top:8px;overflow:hidden">
+            <div style="font-size:12px;color:#5f6368;margin-top:2px">{{ t('业绩', 'Revenue') }}: {{ fmtCurrency(ytdBdActual) }} / {{ fmtCurrency(bdAnnualTarget) }}</div>
+            <div style="height:6px;background:#e8eaed;border-radius:3px;margin-top:6px;overflow:hidden">
               <div :style="`height:100%;width:${Math.min(100, bdAnnualTarget>0?(ytdBdActual/bdAnnualTarget)*100:0)}%;background:${bdAnnualTarget>0&&ytdBdActual/bdAnnualTarget>=1?'#34a853':bdAnnualTarget>0&&ytdBdActual/bdAnnualTarget>=0.86?'#fbbc04':'#ea4335'};transition:width 0.3s`"></div>
             </div>
+            <div style="font-size:11px;color:#5f6368;margin-top:8px;padding-top:6px;border-top:1px dashed #dadce0">
+              🎁 {{ t('奖金发放', 'Bonus Payout') }}: <strong style="color:#e67700">{{ fmtPct(payoutRatioBd) }}</strong>
+              <span style="opacity:0.7">({{ fmtCurrency(ytdBdTeamComm) }} / {{ fmtCurrency(targetCommBd) }})</span>
+            </div>
           </div>
-          <!-- Total YTD commission -->
+          <!-- Total YTD commission with payout ratio -->
           <div style="padding:14px;background:#f1f8f1;border-left:4px solid #0d904f;border-radius:6px">
-            <div style="font-size:12px;color:#5f6368;margin-bottom:4px">💰 {{ t('全员 YTD 实际提成', 'Total YTD Commission') }}</div>
+            <div style="font-size:12px;color:#5f6368;margin-bottom:4px">💰 {{ t('全员 YTD 提成', 'Total YTD Commission') }}</div>
             <div style="font-size:28px;font-weight:700;color:#0d904f">{{ fmtCurrency(ytdActualCommission) }}</div>
             <div style="font-size:12px;color:#5f6368;margin-top:2px">
               Account {{ fmtCurrency(ytdAccountTeamComm) }} · BD {{ fmtCurrency(ytdBdTeamComm) }}
+            </div>
+            <div style="height:6px;background:#e8eaed;border-radius:3px;margin-top:6px;overflow:hidden">
+              <div :style="`height:100%;width:${Math.min(100, payoutRatioTotal*100)}%;background:${payoutRatioTotal>=1?'#34a853':payoutRatioTotal>=0.86?'#fbbc04':'#0d904f'};transition:width 0.3s`"></div>
+            </div>
+            <div style="font-size:11px;color:#5f6368;margin-top:8px;padding-top:6px;border-top:1px dashed #dadce0">
+              🎁 {{ t('整体发放比例', 'Overall Payout') }}: <strong style="color:#0d904f">{{ fmtPct(payoutRatioTotal) }}</strong>
+              <span style="opacity:0.7">{{ t('(对比 100% 目标提成', '(vs 100% target') }} {{ fmtCurrency(targetCommTotal) }})</span>
             </div>
           </div>
         </div>
@@ -1332,6 +1347,14 @@ const app = createApp({
     const ytdActualCommission    = computed(() => [0,1,2,3].reduce((s, qi) => s + allCommissionQ(qi), 0));
     const ytdAccountTeamComm     = computed(() => [0,1,2,3].reduce((s, qi) => s + accountTeamCommQ(qi), 0));
     const ytdBdTeamComm          = computed(() => [0,1,2,3].reduce((s, qi) => s + bdTeamCommQ(qi), 0));
+
+    // Target commission at 100% attainment — used to compute "奖金发放比例" (bonus payout ratio)
+    const targetCommAccount = computed(() => teams[0].members.reduce((s, m) => s + calcResult(m, 1).annualCommission, 0));
+    const targetCommBd      = computed(() => teams[1].members.reduce((s, m) => s + calcResult(m, 1).annualCommission, 0));
+    const targetCommTotal   = computed(() => targetCommAccount.value + targetCommBd.value);
+    const payoutRatioAccount = computed(() => targetCommAccount.value > 0 ? ytdAccountTeamComm.value / targetCommAccount.value : 0);
+    const payoutRatioBd      = computed(() => targetCommBd.value > 0 ? ytdBdTeamComm.value / targetCommBd.value : 0);
+    const payoutRatioTotal   = computed(() => targetCommTotal.value > 0 ? ytdActualCommission.value / targetCommTotal.value : 0);
 
     // Per-member actual commission by quarter (for all-team table)
     function memberCommQ(m, qi) { return calcActualQuarter(m, qi, quarterlyWeights).commission; }
@@ -2159,6 +2182,8 @@ th:first-child,td:first-child{text-align:left}
       bdQTarget, bdQActual, bdQAttainment,
       ytdActualRevenue, ytdAttainment, ytdBdActual, bdAnnualTarget,
       ytdActualCommission, ytdAccountTeamComm, ytdBdTeamComm, grandAnnualTarget,
+      targetCommAccount, targetCommBd, targetCommTotal,
+      payoutRatioAccount, payoutRatioBd, payoutRatioTotal,
       accountTeamCommQ, bdTeamCommQ, allCommissionQ,
       memberCommQ, memberCommYTD,
       cloudStatus, isEditorMode, reloadFromCloud,
