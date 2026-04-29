@@ -1883,6 +1883,18 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
       const bdActual = isYTD ? ytdBdActual.value : bdQActual(qi);
       const bdAttainment = bdTarget > 0 ? bdActual / bdTarget : 0;
 
+      // 奖金发放比例 — actual commission / 100% target commission (scope-aware)
+      const wq = isYTD ? 1 : quarterlyWeights[qi];  // YTD = full-year (1.0); quarter = its weight
+      const tgtCommAcct = teams[0].members.reduce((s, m) => s + calcResult(m, 1).annualCommission * wq, 0);
+      const tgtCommBd   = teams[1].members.reduce((s, m) => s + calcResult(m, 1).annualCommission * wq, 0);
+      const tgtCommAll  = tgtCommAcct + tgtCommBd;
+      const actualCommAcct = isYTD ? ytdAccountTeamComm.value : accountTeamCommQ(qi);
+      const actualCommBd   = isYTD ? ytdBdTeamComm.value : bdTeamCommQ(qi);
+      const actualCommAll  = actualCommAcct + actualCommBd;
+      const payoutAcct = tgtCommAcct > 0 ? actualCommAcct / tgtCommAcct : 0;
+      const payoutBd   = tgtCommBd > 0 ? actualCommBd / tgtCommBd : 0;
+      const payoutAll  = tgtCommAll > 0 ? actualCommAll / tgtCommAll : 0;
+
       const title = `${qLabel} ${isZh?'全员提成结果':'Team Commission Summary'} — 2026`;
 
       const rowsHtml = rows.map(r => `<tr ${r.entered?'':'style="color:#9aa0a6"'}>
@@ -1915,6 +1927,8 @@ h1{font-size:22px;color:#1a73e8;margin:0}
 .team-card .label{font-size:11px;color:#5f6368;text-transform:uppercase;letter-spacing:0.5px}
 .team-card .big{font-size:24px;font-weight:700;margin:4px 0}
 .team-card .sub{font-size:11px;color:#5f6368}
+.team-card .payout-row{font-size:11px;color:#5f6368;margin-top:8px;padding-top:6px;border-top:1px dashed #dadce0}
+.team-card .payout-row strong{color:#202124;font-size:12px}
 table{width:100%;border-collapse:collapse;margin:8px 0}
 th,td{padding:8px 10px;border:1px solid #dadce0;text-align:right}
 th{background:#1a73e8;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
@@ -1935,17 +1949,20 @@ th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
   <div class="team-card account">
     <div class="label">🏢 ${isZh?'Account 团队':'Account Team'}</div>
     <div class="big">${fmtPct(acctAttainment)}</div>
-    <div class="sub">${fmtCurrency(acctActual)} / ${fmtCurrency(acctTarget)}</div>
+    <div class="sub">${isZh?'业绩':'Revenue'}: ${fmtCurrency(acctActual)} / ${fmtCurrency(acctTarget)}</div>
+    <div class="payout-row">🎁 ${isZh?'奖金发放':'Bonus Payout'}: <strong>${fmtPct(payoutAcct)}</strong> <span style="opacity:0.7">(${fmtCurrency(actualCommAcct)} / ${fmtCurrency(tgtCommAcct)})</span></div>
   </div>
   <div class="team-card bd">
     <div class="label">📌 ${isZh?'BD 团队':'BD Team'}</div>
     <div class="big">${fmtPct(bdAttainment)}</div>
-    <div class="sub">${fmtCurrency(bdActual)} / ${fmtCurrency(bdTarget)}</div>
+    <div class="sub">${isZh?'业绩':'Revenue'}: ${fmtCurrency(bdActual)} / ${fmtCurrency(bdTarget)}</div>
+    <div class="payout-row">🎁 ${isZh?'奖金发放':'Bonus Payout'}: <strong>${fmtPct(payoutBd)}</strong> <span style="opacity:0.7">(${fmtCurrency(actualCommBd)} / ${fmtCurrency(tgtCommBd)})</span></div>
   </div>
   <div class="team-card total">
-    <div class="label">💰 ${isZh?'全员提成总额':'Total Commission'}</div>
-    <div class="big">${fmtCurrency(totalComm)}</div>
-    <div class="sub">${rows.filter(r=>r.entered).length} / ${rows.length} ${isZh?'已录入实际数据':'with actuals entered'}</div>
+    <div class="label">💰 ${isZh?'全员提成':'Total Commission'}</div>
+    <div class="big">${fmtCurrency(actualCommAll)}</div>
+    <div class="sub">${isZh?'目标':'Target'} (100%): ${fmtCurrency(tgtCommAll)}</div>
+    <div class="payout-row">🎁 ${isZh?'整体发放':'Overall Payout'}: <strong>${fmtPct(payoutAll)}</strong> <span style="opacity:0.7">${rows.filter(r=>r.entered).length}/${rows.length} ${isZh?'人已录入':'entered'}</span></div>
   </div>
 </div>
 
