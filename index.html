@@ -1733,28 +1733,32 @@ const app = createApp({
           alert(lang.value === 'zh' ? 'PDF 库未加载，请刷新页面重试' : 'PDF library not loaded — please refresh and retry');
           return;
         }
-        // Render HTML into an off-screen container, then pdf-ify it
+        // Container must be in normal flow with real dimensions for html2canvas
+        // to capture it. visibility:hidden + absolute keeps it off-view but rendered.
         const wrap = document.createElement('div');
-        wrap.style.cssText = 'position:fixed;left:-99999px;top:0;width:820px';
-        // Strip <html>/<head>/<body> wrappers — html2pdf wants raw content; keep <style> inline
+        wrap.style.cssText = 'position:absolute;left:0;top:0;width:820px;background:#ffffff;visibility:hidden;z-index:-1;padding:24px;box-sizing:border-box';
+        // Strip <html>/<head>/<body> wrappers — keep inline <style>
         const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
         const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
         wrap.innerHTML = (styleMatch ? `<style>${styleMatch[1]}</style>` : '') + (bodyMatch ? bodyMatch[1] : html);
         document.body.appendChild(wrap);
-        html2pdf().set({
-          margin: [10, 10, 10, 10],
-          filename: baseFilename + '.pdf',
-          image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['css', 'legacy'] }
-        }).from(wrap).save().then(() => {
-          document.body.removeChild(wrap);
-        }).catch((e) => {
-          console.error('[PDF] error', e);
-          document.body.removeChild(wrap);
-          alert((lang.value === 'zh' ? 'PDF 生成失败：' : 'PDF generation failed: ') + (e.message || e));
-        });
+        // Give the DOM a tick to lay out before snapshotting
+        setTimeout(() => {
+          html2pdf().set({
+            margin: [10, 10, 10, 10],
+            filename: baseFilename + '.pdf',
+            image: { type: 'jpeg', quality: 0.95 },
+            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 820 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css', 'legacy', 'avoid-all'] }
+          }).from(wrap).save().then(() => {
+            if (wrap.parentNode) document.body.removeChild(wrap);
+          }).catch((e) => {
+            console.error('[PDF] error', e);
+            if (wrap.parentNode) document.body.removeChild(wrap);
+            alert((lang.value === 'zh' ? 'PDF 生成失败：' : 'PDF generation failed: ') + (e.message || e));
+          });
+        }, 100);
         return;
       }
       // Default: HTML download
