@@ -17,6 +17,7 @@
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -879,12 +880,21 @@ tr:hover td { background: #f8f9fa; }
           <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">
             {{ t('一份包含所有员工某季度实际完成的综合报告，可直接用于团队复盘或月度会议。', 'One report covering all employees for a chosen quarter — for team review or monthly meeting.') }}
           </p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+            <span style="font-size:12px;color:var(--text-secondary);font-weight:600;min-width:48px">📕 PDF:</span>
+            <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterSummary(0, 'pdf')">Q1</button>
+            <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterSummary(1, 'pdf')">Q2</button>
+            <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterSummary(2, 'pdf')">Q3</button>
+            <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterSummary(3, 'pdf')">Q4</button>
+            <button class="export-btn" style="background:#0d904f;color:#fff;border-color:#0d904f" @click="exportQuarterSummary('ytd', 'pdf')">YTD</button>
+          </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterSummary(0)">📄 Q1 {{ t('总结', 'Summary') }}</button>
-            <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterSummary(1)">📄 Q2 {{ t('总结', 'Summary') }}</button>
-            <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterSummary(2)">📄 Q3 {{ t('总结', 'Summary') }}</button>
-            <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterSummary(3)">📄 Q4 {{ t('总结', 'Summary') }}</button>
-            <button class="export-btn" style="background:#0d904f;color:#fff;border-color:#0d904f" @click="exportQuarterSummary('ytd')">📊 YTD {{ t('全年汇总', 'Year-to-Date') }}</button>
+            <span style="font-size:12px;color:var(--text-secondary);font-weight:600;min-width:48px">📄 HTML:</span>
+            <button class="export-btn" @click="exportQuarterSummary(0, 'html')">Q1</button>
+            <button class="export-btn" @click="exportQuarterSummary(1, 'html')">Q2</button>
+            <button class="export-btn" @click="exportQuarterSummary(2, 'html')">Q3</button>
+            <button class="export-btn" @click="exportQuarterSummary(3, 'html')">Q4</button>
+            <button class="export-btn" @click="exportQuarterSummary('ytd', 'html')">YTD</button>
           </div>
         </div>
 
@@ -919,8 +929,9 @@ tr:hover td { background: #f8f9fa; }
                 </p>
               </div>
               <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
-                <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterlyReport(m)" :title="t('生成发给员工的季度提成结果报告', 'Generate quarterly commission report for the employee')">📄 {{ t('导出季度结果', 'Quarterly Report') }}</button>
-                <button class="export-btn" @click="exportEmployee(m)">{{ t('导出 HTML', 'Export HTML') }}</button>
+                <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterlyReport(m, 'pdf')" :title="t('生成 PDF 版季度提成结果报告', 'Generate PDF quarterly report')">📕 {{ t('季度结果 PDF', 'Quarterly PDF') }}</button>
+                <button class="export-btn" @click="exportQuarterlyReport(m, 'html')" :title="t('生成 HTML 版季度结果（可在浏览器中再打印为 PDF）', 'Generate HTML quarterly report')">📄 {{ t('季度结果 HTML', 'Quarterly HTML') }}</button>
+                <button class="export-btn" @click="exportEmployee(m)">{{ t('完整 HTML', 'Full HTML') }}</button>
                 <button class="export-btn" style="background:#34a853;color:#fff;border-color:#34a853" @click="exportMemberExcel(m)">{{ t('导出 Excel', 'Export Excel') }}</button>
               </div>
             </div>
@@ -1714,6 +1725,47 @@ const app = createApp({
     onMounted(() => { if (authenticated.value) renderCharts(); });
 
     // === Export ===
+    // Save an HTML report either as .html (download) or .pdf (via html2pdf)
+    // format: 'html' | 'pdf'
+    function saveReport(html, baseFilename, format) {
+      if (format === 'pdf') {
+        if (typeof html2pdf === 'undefined') {
+          alert(lang.value === 'zh' ? 'PDF 库未加载，请刷新页面重试' : 'PDF library not loaded — please refresh and retry');
+          return;
+        }
+        // Render HTML into an off-screen container, then pdf-ify it
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:fixed;left:-99999px;top:0;width:820px';
+        // Strip <html>/<head>/<body> wrappers — html2pdf wants raw content; keep <style> inline
+        const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+        const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+        wrap.innerHTML = (styleMatch ? `<style>${styleMatch[1]}</style>` : '') + (bodyMatch ? bodyMatch[1] : html);
+        document.body.appendChild(wrap);
+        html2pdf().set({
+          margin: [10, 10, 10, 10],
+          filename: baseFilename + '.pdf',
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy'] }
+        }).from(wrap).save().then(() => {
+          document.body.removeChild(wrap);
+        }).catch((e) => {
+          console.error('[PDF] error', e);
+          document.body.removeChild(wrap);
+          alert((lang.value === 'zh' ? 'PDF 生成失败：' : 'PDF generation failed: ') + (e.message || e));
+        });
+        return;
+      }
+      // Default: HTML download
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = baseFilename + '.html';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
     function exportEmployee(member) {
       const isZh = lang.value === 'zh';
       const allMembers = teams.flatMap(t => t.members);
@@ -1844,7 +1896,8 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
     }
 
     // Team-wide quarterly summary — pass qi (0..3) for one quarter, or 'ytd' for full year
-    function exportQuarterSummary(scope) {
+    // format: 'html' (default) | 'pdf'
+    function exportQuarterSummary(scope, format = 'html') {
       const isZh = lang.value === 'zh';
       const isYTD = scope === 'ytd';
       const qi = isYTD ? null : Number(scope);
@@ -2017,17 +2070,14 @@ ${contribRows ? `
 </div>
 </body></html>`;
 
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
       const fileQ = isYTD ? 'YTD' : `Q${qi+1}`;
-      a.download = `Team_${fileQ}_Summary_${new Date().toISOString().slice(0,10)}.html`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      const baseName = `Team_${fileQ}_Summary_${new Date().toISOString().slice(0,10)}`;
+      saveReport(html, baseName, format);
     }
 
     // Per-employee quarterly results — clean printable report focused on actuals
-    function exportQuarterlyReport(m) {
+    // format: 'html' (default) | 'pdf'
+    function exportQuarterlyReport(m, format = 'html') {
       const isZh = lang.value === 'zh';
       const ytd = memberActualYTD(m);
       const title = `${m.name} — ${isZh ? '2026 季度提成结果' : '2026 Quarterly Commission'}`;
@@ -2123,12 +2173,8 @@ th:first-child,td:first-child{text-align:left}
 </div>
 </body></html>`;
 
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${m.name.replace(/[^\w]/g, '_')}_Quarterly_${new Date().toISOString().slice(0,10)}.html`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      const baseName = `${m.name.replace(/[^\w]/g, '_')}_Quarterly_${new Date().toISOString().slice(0,10)}`;
+      saveReport(html, baseName, format);
     }
 
     function exportMemberExcel(m) {
