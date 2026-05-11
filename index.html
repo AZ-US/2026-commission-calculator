@@ -17,7 +17,6 @@
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -929,8 +928,8 @@ tr:hover td { background: #f8f9fa; }
                 </p>
               </div>
               <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
-                <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterlyReport(m, 'pdf')" :title="t('生成 PDF 版季度提成结果报告', 'Generate PDF quarterly report')">📕 {{ t('季度结果 PDF', 'Quarterly PDF') }}</button>
-                <button class="export-btn" @click="exportQuarterlyReport(m, 'html')" :title="t('生成 HTML 版季度结果（可在浏览器中再打印为 PDF）', 'Generate HTML quarterly report')">📄 {{ t('季度结果 HTML', 'Quarterly HTML') }}</button>
+                <button class="export-btn" style="background:#1a73e8;color:#fff;border-color:#1a73e8" @click="exportQuarterlyReport(m, 'pdf')" :title="t('打开打印窗口，可选「存储为 PDF」', 'Open print dialog → Save as PDF')">📕 {{ t('季度结果 PDF', 'Quarterly PDF') }}</button>
+                <button class="export-btn" @click="exportQuarterlyReport(m, 'html')" :title="t('下载 HTML 文件', 'Download HTML file')">📄 {{ t('季度结果 HTML', 'Quarterly HTML') }}</button>
                 <button class="export-btn" @click="exportEmployee(m)">{{ t('完整 HTML', 'Full HTML') }}</button>
                 <button class="export-btn" style="background:#34a853;color:#fff;border-color:#34a853" @click="exportMemberExcel(m)">{{ t('导出 Excel', 'Export Excel') }}</button>
               </div>
@@ -1729,36 +1728,24 @@ const app = createApp({
     // format: 'html' | 'pdf'
     function saveReport(html, baseFilename, format) {
       if (format === 'pdf') {
-        if (typeof html2pdf === 'undefined') {
-          alert(lang.value === 'zh' ? 'PDF 库未加载，请刷新页面重试' : 'PDF library not loaded — please refresh and retry');
+        // Open the report in a new window, auto-trigger print dialog so the user
+        // can choose "Save as PDF". This is more reliable than html2canvas-based
+        // capture (which had issues with off-screen rendering).
+        const printHtml = html.replace('</body>',
+          `<script>
+            window.addEventListener('load', function(){
+              document.title = ${JSON.stringify(baseFilename)};
+              setTimeout(function(){ window.focus(); window.print(); }, 300);
+            });
+          </`+ `script></body>`);
+        const w = window.open('', '_blank');
+        if (!w) {
+          alert(lang.value === 'zh' ? '弹窗被浏览器拦截了，请允许此站点弹窗后重试' : 'Popup was blocked — please allow popups for this site and retry');
           return;
         }
-        // Container must be in normal flow with real dimensions for html2canvas
-        // to capture it. visibility:hidden + absolute keeps it off-view but rendered.
-        const wrap = document.createElement('div');
-        wrap.style.cssText = 'position:absolute;left:0;top:0;width:820px;background:#ffffff;visibility:hidden;z-index:-1;padding:24px;box-sizing:border-box';
-        // Strip <html>/<head>/<body> wrappers — keep inline <style>
-        const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-        const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-        wrap.innerHTML = (styleMatch ? `<style>${styleMatch[1]}</style>` : '') + (bodyMatch ? bodyMatch[1] : html);
-        document.body.appendChild(wrap);
-        // Give the DOM a tick to lay out before snapshotting
-        setTimeout(() => {
-          html2pdf().set({
-            margin: [10, 10, 10, 10],
-            filename: baseFilename + '.pdf',
-            image: { type: 'jpeg', quality: 0.95 },
-            html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 820 },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak: { mode: ['css', 'legacy', 'avoid-all'] }
-          }).from(wrap).save().then(() => {
-            if (wrap.parentNode) document.body.removeChild(wrap);
-          }).catch((e) => {
-            console.error('[PDF] error', e);
-            if (wrap.parentNode) document.body.removeChild(wrap);
-            alert((lang.value === 'zh' ? 'PDF 生成失败：' : 'PDF generation failed: ') + (e.message || e));
-          });
-        }, 100);
+        w.document.open();
+        w.document.write(printHtml);
+        w.document.close();
         return;
       }
       // Default: HTML download
