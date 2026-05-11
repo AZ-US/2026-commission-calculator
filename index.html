@@ -352,14 +352,18 @@ tr:hover td { background: #f8f9fa; }
   text-align: center;
 }
 .login-box .login-icon {
-  width: 64px; height: 64px;
-  background: var(--primary-light);
-  border-radius: 50%;
+  width: 72px; height: 72px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #fff;
+  border-radius: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 20px;
-  font-size: 28px;
+  font-size: 44px;
+  font-weight: 800;
+  box-shadow: 0 6px 20px rgba(26,115,232,0.35);
+  letter-spacing: -2px;
 }
 .login-box h2 { font-size: 22px; margin-bottom: 6px; color: var(--text); }
 .login-box p { font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; }
@@ -413,7 +417,7 @@ tr:hover td { background: #f8f9fa; }
   <!-- Login Screen -->
   <div v-if="!authenticated" class="login-overlay">
     <div class="login-box">
-      <div class="login-icon">&#128274;</div>
+      <div class="login-icon">$</div>
       <h2>{{ t('2026 提成计算器', '2026 Commission Calculator') }}</h2>
       <p>{{ t('请输入访问密码', 'Please enter password to continue') }}</p>
       <form @submit.prevent="doLogin">
@@ -1249,8 +1253,11 @@ const app = createApp({
   setup() {
     const PASSWORD_HASH = '5a4b3c'; // simple hash of '2026sales'
     const TOKEN = '2026_sales_commission';
-    const urlToken = new URLSearchParams(window.location.search).get('token');
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
     if (urlToken === TOKEN) sessionStorage.setItem('commCalcAuth', 'true');
+    // If a valid editor secret is in the URL, the user is clearly authorized — skip the password gate
+    if (urlParams.get('edit') === 'AmyZ2026') sessionStorage.setItem('commCalcAuth', 'true');
     const authenticated = ref(sessionStorage.getItem('commCalcAuth') === 'true');
     const passwordInput = ref('');
     const loginError = ref('');
