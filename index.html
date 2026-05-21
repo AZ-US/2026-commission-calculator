@@ -444,7 +444,6 @@ tr:hover td { background: #f8f9fa; }
       </span>
     </h1>
     <div class="header-actions">
-      <a href="finance-manager-interview.html" target="_blank" style="background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.3);padding:6px 14px;border-radius:20px;font-size:13px;text-decoration:none;display:inline-flex;align-items:center;gap:4px">📋 Finance Manager 面试评分表</a>
       <button v-if="!isEditorMode" @click="reloadFromCloud" :title="t('从云端重新加载最新数据（丢弃本地改动）', 'Reload latest from cloud (discard local changes)')">🔄 {{ t('重载云端', 'Reload cloud') }}</button>
       <button class="lang-toggle" @click="lang = lang === 'zh' ? 'en' : 'zh'">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
       <button @click="saveToFile">{{ t('备份', 'Backup') }}</button>
