@@ -494,8 +494,17 @@ tr:hover td { background: #f8f9fa; }
         <p style="font-size:13px;color:var(--text-secondary);margin-bottom:4px">
           {{ t('Account 总额 = 公司总收入目标（$63,236,128）；BD 目标为其中 10%，已包含在内，不重复计算。', 'Account total = company revenue target ($63,236,128). BD quota is 10% of Account and is included — not additive.') }}
         </p>
-        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">
           {{ t('💡 请在 Emily 页面输入公司总收入，在 Jonathan 页面输入 BD 收入。', '💡 Enter total company revenue in Emily\'s tab; BD revenue in Jonathan\'s tab.') }}
+        </p>
+        <p style="font-size:12px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label style="background:#1a73e8;color:#fff;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:inline-block;white-space:nowrap">
+            📥 {{ t('导入原始数据 (Excel)', 'Import Raw Data (Excel)') }}
+            <input type="file" class="hidden-input" accept=".xlsx,.xls" @change="importRawData">
+          </label>
+          <span style="color:var(--text-secondary)">
+            {{ t('上传按客户×月份的净销售明细表，自动汇总季度并归属到 Account 团队各人；Emily 取全表合计；BD 三人不受影响。', 'Upload the customer × month net-sales raw data — quarters are auto-aggregated and attributed to Account team members; Emily gets the grand total; BD members are untouched.') }}
+          </span>
         </p>
 
         <!-- Account (Company Total) -->
@@ -1499,6 +1508,109 @@ const app = createApp({
       e.target.value = '';
     }
 
+    // ===== Raw revenue data import (customer × month net-sales xlsx) =====
+    // salesrep (lowercased) → member id. Reps in RAW_IMPORT_BD are skipped (BD has its own sheet);
+    // anything else unmatched counts toward Emily's company total only.
+    const RAW_IMPORT_MAP = {
+      'nancy murray': 'nancy',
+      'justin wieczorek': 'justin',
+      'robert magness': 'robert',
+    };
+    const RAW_IMPORT_BD = ['jonathan miller', 'daniel colmenares', 'dash', 'na biz dev'];
+
+    function importRawData(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const isZh = lang.value === 'zh';
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const wb = XLSX.read(reader.result, { type: 'array' });
+          let rows = null, headerIdx = -1;
+          for (const name of wb.SheetNames) {
+            const arr = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1 });
+            const idx = arr.findIndex(r => Array.isArray(r) && r.includes('customer_name') && r.includes('salesrep'));
+            if (idx !== -1) { rows = arr; headerIdx = idx; break; }
+          }
+          if (!rows) { alert(isZh ? '未找到含 customer_name / salesrep 表头的工作表' : 'No sheet found with customer_name / salesrep headers'); return; }
+          const header = rows[headerIdx];
+          const custCol = header.indexOf('customer_name');
+          const repCol = header.indexOf('salesrep');
+          const monthCols = [];
+          header.forEach((h, ci) => {
+            const m = /^net_sales_usd-(\d{2})(\d{2})$/.exec(String(h == null ? '' : h).trim());
+            if (m) monthCols.push({ col: ci, quarter: Math.ceil(parseInt(m[2], 10) / 3) });
+          });
+          if (!monthCols.length) { alert(isZh ? '未找到月度收入列（如 net_sales_usd-2601）' : 'No monthly revenue columns found (e.g. net_sales_usd-2601)'); return; }
+          const quartersInFile = [...new Set(monthCols.map(c => c.quarter))].sort();
+
+          const byRep = {}; const grand = [0, 0, 0, 0];
+          for (let i = headerIdx + 1; i < rows.length; i++) {
+            const r = rows[i];
+            if (!r || !r[custCol] || !r[repCol]) continue;
+            const rep = String(r[repCol]).trim();
+            if (!byRep[rep]) byRep[rep] = [0, 0, 0, 0];
+            for (const mc of monthCols) {
+              const v = parseFloat(r[mc.col]);
+              if (!isFinite(v)) continue;
+              byRep[rep][mc.quarter - 1] += v;
+              grand[mc.quarter - 1] += v;
+            }
+          }
+
+          const allM = teams.flatMap(t => t.members);
+          const matched = {}; const bdSkipped = []; const unmatched = [];
+          for (const [rep, qs] of Object.entries(byRep)) {
+            const id = RAW_IMPORT_MAP[rep.toLowerCase()];
+            if (id) matched[id] = { rep, qs };
+            else if (RAW_IMPORT_BD.includes(rep.toLowerCase())) bdSkipped.push([rep, qs]);
+            else unmatched.push([rep, qs]);
+          }
+
+          const round2 = v => Math.round(v * 100) / 100;
+          const qList = quartersInFile.map(q => 'Q' + q).join(isZh ? '、' : ', ');
+          const fmtQs = qs => quartersInFile.map(q => 'Q' + q + ' ' + fmtCurrency(qs[q - 1])).join(' | ');
+          const emily = allM.find(m => m.id === 'emily');
+
+          // The dashboard adds contributor (e.g. Robert) revenue back on top of Emily's entry,
+          // so Emily gets the grand total MINUS contributor rows to avoid double counting.
+          const emilyQs = [...grand];
+          Object.values(matched).forEach(({ rep, qs }) => {
+            const m = allM.find(x => x.id === RAW_IMPORT_MAP[rep.toLowerCase()]);
+            if (m && m.role === 'contributor') quartersInFile.forEach(q => { emilyQs[q - 1] -= qs[q - 1]; });
+          });
+
+          let msg = (isZh ? `从「${file.name}」解析出 ${qList} 数据，将写入：\n\n` : `Parsed ${qList} from "${file.name}". Will write:\n\n`);
+          msg += `Emily (${isZh ? '公司总收入=全表合计，已扣除贡献者部分，系统会自动加回' : 'company total = all rows minus contributors (re-added automatically)'}): ${fmtQs(emilyQs)}\n`;
+          Object.values(matched).forEach(({ rep, qs }) => {
+            const m = allM.find(x => x.id === RAW_IMPORT_MAP[rep.toLowerCase()]);
+            msg += `${m.name} (${rep}): ${fmtQs(qs)}\n`;
+          });
+          if (bdSkipped.length) {
+            msg += '\n' + (isZh ? '跳过 BD（另有单独数据表）：\n' : 'Skipped BD (separate sheet):\n');
+            bdSkipped.forEach(([rep, qs]) => { msg += `  ${rep}: ${fmtQs(qs)}\n`; });
+          }
+          if (unmatched.length) {
+            msg += '\n' + (isZh ? '无对应人头（仅计入公司总数）：\n' : 'No matching member (company total only):\n');
+            unmatched.forEach(([rep, qs]) => { msg += `  ${rep}: ${fmtQs(qs)}\n`; });
+          }
+          msg += '\n' + (isZh ? '确定写入？（只覆盖上述人员的这些季度，BD 三人不变）' : 'Proceed? (Only these members/quarters are overwritten; BD members unchanged)');
+          if (!confirm(msg)) return;
+
+          if (emily) quartersInFile.forEach(q => { emily.quarterlyActual[q - 1] = round2(emilyQs[q - 1]); });
+          Object.values(matched).forEach(({ rep, qs }) => {
+            const m = allM.find(x => x.id === RAW_IMPORT_MAP[rep.toLowerCase()]);
+            if (m) quartersInFile.forEach(q => { m.quarterlyActual[q - 1] = round2(qs[q - 1]); });
+          });
+        } catch (err) {
+          console.error(err);
+          alert(isZh ? '解析失败：' + err.message : 'Import failed: ' + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      e.target.value = '';
+    }
+
     function resetDefaults() {
       if (!confirm(lang.value === 'zh' ? '确定重置为默认值？' : 'Reset to defaults?')) return;
       const dt = defaultTeams();
@@ -2246,7 +2358,7 @@ th:first-child,td:first-child{text-align:left}
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
       weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary,
       exportMemberExcel, exportAllExcel,
-      saveToFile, loadFromFile, resetDefaults,
+      saveToFile, loadFromFile, importRawData, resetDefaults,
       memberActualQ, memberActualYTD,
       accountDirector, bdDirector,
       accountQTarget, accountQActual, accountQAttainment,
