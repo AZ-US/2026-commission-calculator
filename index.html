@@ -857,6 +857,9 @@ tr:hover td { background: #f8f9fa; }
               <div :style="`height:100%;width:${Math.min(100, payoutRatioTotal*100)}%;background:${payoutRatioTotal>=1?'#34a853':payoutRatioTotal>=0.86?'#fbbc04':'#0d904f'};transition:width 0.3s`"></div>
             </div>
             <div style="font-size:11px;color:#5f6368;margin-top:8px;padding-top:6px;border-top:1px dashed #dadce0">
+              📈 {{ t('全员完成率', 'Overall Attainment') }}: <strong style="color:#0d904f">{{ fmtPct(ytdAttainment) }}</strong>
+              <span style="opacity:0.7">{{ t('（同 Account 团队口径：公司总业绩 ÷ 全年目标）', '(same basis as Account team: company revenue ÷ annual target)') }}</span>
+              <br>
               🎁 {{ t('整体发放比例', 'Overall Payout') }}: <strong style="color:#0d904f">{{ fmtPct(payoutRatioTotal) }}</strong>
               <span style="opacity:0.7">{{ t('(对比 100% 目标提成', '(vs 100% target') }} {{ fmtCurrency(targetCommTotal) }})</span>
             </div>
