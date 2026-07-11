@@ -1211,7 +1211,7 @@ function defaultTeams() {
         // Robert (resigned): commission entered MANUALLY per quarter from the BH reconciliation
         // (ref 0.075% flat, no multiplier). Only Q1+Q2 apply. His revenue still counts toward
         // Account attainment via quarterlyActual, which is independent of the commission entry.
-        { id: 'robert', name: 'Robert (TBD)', titleZh: '副总裁 · B&H 客户', titleEn: 'VP · B&H Accounts', role: 'contributor', baseSalary: 160000, rate: 0.00075, manualCommission: [3989.44, 7203.98, 0, 0], revenueTarget: 0, ref2025Commission: 29664, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
+        { id: 'robert', name: 'Robert (B&H)', titleZh: '副总裁 · B&H 客户', titleEn: 'VP · B&H Accounts', role: 'contributor', baseSalary: 160000, rate: 0.00075, manualCommission: [3989.44, 7203.98, 0, 0], revenueTarget: 0, ref2025Commission: 29664, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
       ]
     },
     {
@@ -1486,6 +1486,7 @@ const app = createApp({
                 // the BH reconciliation). Older snapshots — including the short-lived flat-rate
                 // plan (noMultiplier) — get the defaults; the flags are retired.
                 if (target.id === 'robert') {
+                  if (/\(TBD\)/i.test(target.name || '')) target.name = 'Robert (B&H)';
                   delete target.noMultiplier;
                   delete target.commQuarters;
                   if (!('manualCommission' in sm)) {
