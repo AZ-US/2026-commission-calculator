@@ -1206,7 +1206,7 @@ function defaultTeams() {
       key: 'account', nameZh: '客户团队', nameEn: 'Account Team',
       members: [
         { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, ref2025Commission: 6000, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
-        { id: 'nancy', name: 'Nancy (TBD)', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 120000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 20516, quarterlyActual: [0,0,0,0] },
+        { id: 'nancy', name: 'Nancy', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 120000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 20516, quarterlyActual: [0,0,0,0] },
         { id: 'justin', name: 'Justin', titleZh: '客户经理', titleEn: 'Account Mgr', role: 'individual', baseSalary: 75000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 21129, quarterlyActual: [0,0,0,0] },
         // Robert (resigned): commission entered MANUALLY per quarter from the BH reconciliation
         // (ref 0.075% flat, no multiplier). Only Q1+Q2 apply. His revenue still counts toward
@@ -1477,6 +1477,11 @@ const app = createApp({
               if (teams[ti].members[mi]) {
                 const target = teams[ti].members[mi];
                 Object.assign(target, sm);
+                // Migration: Nancy is a regular employee now — drop the (TBD) suffix
+                // that older snapshots still carry
+                if (target.id === 'nancy' && /\(TBD\)/i.test(target.name || '')) {
+                  target.name = 'Nancy';
+                }
                 // Migration: Robert's commission is now a manual entry (resigned; Q1/Q2 from
                 // the BH reconciliation). Older snapshots — including the short-lived flat-rate
                 // plan (noMultiplier) — get the defaults; the flags are retired.
