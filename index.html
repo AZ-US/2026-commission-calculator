@@ -943,7 +943,7 @@ tr:hover td { background: #f8f9fa; }
                 <p>
                   {{ t(m.titleZh, m.titleEn) }} ·
                   <span class="team-badge" :class="'team-' + team.key">{{ t(team.nameZh, team.nameEn) }}</span>
-                  <span v-if="m.role === 'director'" class="role-director"> · Override</span>
+                  <span v-if="m.role === 'director'" class="role-director"> · Override{{ m.id === 'emily' ? t('（Q1 Q2 不包括 B&H account）', ' (Q1 & Q2 exclude the B&H account)') : '' }}</span>
                 </p>
               </div>
               <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
