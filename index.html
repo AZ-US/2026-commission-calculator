@@ -771,9 +771,9 @@ tr:hover td { background: #f8f9fa; }
 
       <!-- Contributor Revenue (adds to Account team attainment, but earns no commission) -->
       <div class="card" v-if="contributorMembers.length > 0">
-        <div class="card-title">🤝 {{ t('贡献者收入（计入 Account 完成率，不发提成）', 'Contributor Revenue (Counts toward Account attainment · no commission)') }}</div>
+        <div class="card-title">🤝 {{ t('贡献者收入（计入 Account 完成率）', 'Contributor Revenue (Counts toward Account attainment)') }}</div>
         <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">
-          {{ t('这些同事维护特定客户但没有提成方案。他们的实际收入会自动加到 Account 团队总完成率里，但他们本人不发提成。', 'These members maintain specific accounts but have no commission plan. Their revenue is added to the Account team attainment, but they themselves earn no commission.') }}
+          {{ t('这些同事维护特定客户，实际收入会自动加到 Account 团队总完成率里。Robert 的提成按实际收入 × 0.075% 固定计提，无乘数，且仅 Q1、Q2 计提（Q3、Q4 收入计入完成率但不产生提成）。', 'These members maintain specific accounts; their revenue is added to the Account team attainment. Robert earns a flat 0.075% of actual revenue — no multiplier, Q1 & Q2 only (Q3/Q4 revenue counts toward attainment but earns no commission).') }}
         </p>
         <div style="overflow-x:auto">
           <table>
@@ -782,6 +782,7 @@ tr:hover td { background: #f8f9fa; }
                 <th>{{ t('姓名 / 负责客户', 'Name / Accounts') }}</th>
                 <th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th>
                 <th>{{ t('YTD 贡献', 'YTD Contribution') }}</th>
+                <th>{{ t('YTD 提成', 'YTD Commission') }}</th>
                 <th style="min-width:180px">{{ t('备注', 'Notes') }}</th>
               </tr>
             </thead>
@@ -795,6 +796,7 @@ tr:hover td { background: #f8f9fa; }
                   {{ contributorQActual(m, qi-1) > 0 ? fmtCurrency(contributorQActual(m, qi-1)) : '—' }}
                 </td>
                 <td style="font-weight:700;color:#1a73e8">{{ fmtCurrency(contributorYTD(m)) }}</td>
+                <td style="font-weight:700;color:#0d904f">{{ fmtCurrency(memberActualYTD(m).totalCommission) }}</td>
                 <td>
                   <input type="text" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:12px"
                          :placeholder="t('备注…', 'Notes…')"
@@ -806,6 +808,7 @@ tr:hover td { background: #f8f9fa; }
                 <td>{{ t('合计', 'Total') }}</td>
                 <td colspan="4"></td>
                 <td style="color:#1a73e8">{{ fmtCurrency(contributorsTotalYTD) }}</td>
+                <td></td>
                 <td></td>
               </tr>
             </tbody>
@@ -1140,13 +1143,20 @@ tr:hover td { background: #f8f9fa; }
                 <p>= {{ fmtCurrency(m.revenueTarget) }} × {{ (m.rate * 100).toFixed(4) }}% × Multiplier</p>
                 <p>{{ t('年度提成 (100%)', 'Annual Commission (100%)') }} = {{ fmtCurrency(m.revenueTarget) }} × {{ (m.rate * 100).toFixed(4) }}% × 1.00 = <strong>{{ fmtCurrency(calcResult(m, 1).annualCommission) }}</strong></p>
               </div>
+              <div v-else-if="m.noMultiplier" style="font-size:13px; line-height:2">
+                <p><strong>Commission</strong> = {{ t('实际收入', 'Actual Revenue') }} × {{ (m.rate * 100).toFixed(4) }}%</p>
+                <p>{{ t('固定比例计提，无收入乘数（Multiplier 不适用）', 'Flat rate — no revenue multiplier applies') }}</p>
+                <p>{{ t('仅 Q1、Q2 计提；Q3、Q4 收入计入 Account 完成率但不产生提成', 'Q1 & Q2 only; Q3/Q4 revenue counts toward Account attainment but earns no commission') }}</p>
+              </div>
               <div v-else style="font-size:13px; line-height:2">
                 <p><strong>Commission</strong> = {{ t('个人收入目标', 'Revenue Quota') }} × Commission Rate × Revenue Multiplier</p>
                 <p>= {{ fmtCurrency(m.revenueTarget) }} × {{ (m.rate * 100).toFixed(4) }}% × Multiplier</p>
                 <p>{{ t('年度提成 (100%)', 'Annual Commission (100%)') }} = {{ fmtCurrency(m.revenueTarget) }} × {{ (m.rate * 100).toFixed(4) }}% × 1.00 = <strong>{{ fmtCurrency(calcResult(m, 1).annualCommission) }}</strong></p>
               </div>
               <p style="font-size:12px; color:var(--text-secondary); margin-top:8px">
-                {{ t('季度提成 = 年度提成 × 季度权重 | 结算周期：季末后30天内发放', 'Quarterly Commission = Annual Commission × Quarterly Weight | Settlement: within 30 days after quarter-end') }}
+                {{ m.noMultiplier
+                   ? t('季度提成 = 当季实际收入 × 比例 | 结算周期：季末后30天内发放', 'Quarterly Commission = Actual Revenue × Rate | Settlement: within 30 days after quarter-end')
+                   : t('季度提成 = 年度提成 × 季度权重 | 结算周期：季末后30天内发放', 'Quarterly Commission = Annual Commission × Quarterly Weight | Settlement: within 30 days after quarter-end') }}
               </p>
             </div>
           </div>
@@ -1185,7 +1195,8 @@ function defaultTeams() {
         { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, ref2025Commission: 6000, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
         { id: 'nancy', name: 'Nancy (TBD)', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 120000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 20516, quarterlyActual: [0,0,0,0] },
         { id: 'justin', name: 'Justin', titleZh: '客户经理', titleEn: 'Account Mgr', role: 'individual', baseSalary: 75000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 21129, quarterlyActual: [0,0,0,0] },
-        { id: 'robert', name: 'Robert (TBD)', titleZh: '副总裁 · B&H 客户', titleEn: 'VP · B&H Accounts', role: 'contributor', baseSalary: 160000, rate: 0, revenueTarget: 0, ref2025Commission: 29664, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
+        // Robert: flat 0.075% of actual revenue, no multiplier, Q1+Q2 only (commQuarters is 0-indexed)
+        { id: 'robert', name: 'Robert (TBD)', titleZh: '副总裁 · B&H 客户', titleEn: 'VP · B&H Accounts', role: 'contributor', baseSalary: 160000, rate: 0.00075, noMultiplier: true, commQuarters: [0,1], revenueTarget: 0, ref2025Commission: 29664, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
       ]
     },
     {
@@ -1224,7 +1235,7 @@ function getMultiplier(attainment) {
 //   commission = actual × rate × multiplier
 //             = (attainment × target) × rate × multiplier
 function calcCommission(member, attainment, weights) {
-  const multiplier = getMultiplier(attainment);
+  const multiplier = member.noMultiplier ? 1 : getMultiplier(attainment);
   const simulatedActual = member.revenueTarget * attainment;
   const annualCommission = simulatedActual * member.rate * multiplier;
   const quarterly = weights.map(w => annualCommission * w);
@@ -1241,6 +1252,12 @@ function calcActualQuarter(member, qi, weights) {
     return { attainment: 0, multiplier: 0, commission: 0, actual: 0, qTarget, entered: false };
   }
   const attainment = qTarget > 0 ? actual / qTarget : 0;
+  // Flat-rate members (e.g. Robert): no multiplier, and only eligible quarters earn commission
+  if (member.noMultiplier) {
+    const eligible = !member.commQuarters || member.commQuarters.includes(qi);
+    const commission = eligible ? actual * member.rate : 0;
+    return { attainment, multiplier: eligible ? 1 : 0, commission, actual, qTarget, entered: true };
+  }
   const multiplier = getMultiplier(attainment);
   const commission = actual * member.rate * multiplier;
   return { attainment, multiplier, commission, actual, qTarget, entered: true };
@@ -1444,6 +1461,13 @@ const app = createApp({
               if (teams[ti].members[mi]) {
                 const target = teams[ti].members[mi];
                 Object.assign(target, sm);
+                // Migration: snapshots saved before Robert's flat-rate plan carry rate 0
+                // and no plan flags — re-apply the new plan so old data can't clobber it
+                if (target.id === 'robert' && !('noMultiplier' in sm)) {
+                  target.rate = 0.00075;
+                  target.noMultiplier = true;
+                  target.commQuarters = [0, 1];
+                }
                 // Ensure quarterlyActual array stays reactive
                 if (sm.quarterlyActual && Array.isArray(sm.quarterlyActual)) {
                   if (!target.quarterlyActual) target.quarterlyActual = [0,0,0,0];
