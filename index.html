@@ -969,7 +969,7 @@ tr:hover td { background: #f8f9fa; }
                   </div>
                 </div>
                 <div class="param-item">
-                  <span class="param-label">{{ m.role === 'director' ? t('Override 提成比例', 'Override Rate') : t('提成比例 Commission Rate', 'Commission Rate') }}</span>
+                  <span class="param-label">{{ m.id === 'emily' ? t('Override 提成比例（Q1 Q2 不包括 B&H account）', 'Override Rate (Q1 & Q2 exclude the B&H account)') : m.role === 'director' ? t('Override 提成比例', 'Override Rate') : t('提成比例 Commission Rate', 'Commission Rate') }}</span>
                   <div style="display:flex;align-items:center;gap:4px">
                     <input class="editable-input narrow" type="number" step="0.001"
                            :value="(m.rate * 100).toFixed(4)"
