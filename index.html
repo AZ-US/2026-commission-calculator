@@ -834,8 +834,14 @@ tr:hover td { background: #f8f9fa; }
       </div>
 
       <!-- YTD Real-Time Tracking -->
-      <div class="card" v-if="ytdActualRevenue > 0 || ytdBdActual > 0">
-        <div class="card-title">🎯 {{ t('YTD 实时追踪 Real-Time Tracking', 'YTD Real-Time Tracking') }}</div>
+      <div class="card" id="ytdTrackingCard" v-if="ytdActualRevenue > 0 || ytdBdActual > 0">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <span>🎯 {{ t('YTD 实时追踪 Real-Time Tracking', 'YTD Real-Time Tracking') }}</span>
+          <button @click="exportYtdImage" data-html2canvas-ignore :title="t('把此模块保存为 PNG 图片', 'Save this card as a PNG image')"
+                  style="font-size:12px;padding:6px 12px;background:#0d904f;color:#fff;border:1px solid #0d904f;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap">
+            🖼️ {{ t('下载图片', 'Download Image') }}
+          </button>
+        </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:12px">
           <!-- Account team progress -->
           <div style="padding:14px;background:#f8fbff;border-left:4px solid #1a73e8;border-radius:6px">
@@ -2099,6 +2105,36 @@ const app = createApp({
       URL.revokeObjectURL(a.href);
     }
 
+    // Lazy-load html2canvas (only fetched on first image export, not at page load)
+    function loadHtml2Canvas() {
+      return new Promise((resolve, reject) => {
+        if (window.html2canvas) return resolve(window.html2canvas);
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+        s.onload = () => resolve(window.html2canvas);
+        s.onerror = () => reject(new Error('html2canvas load failed'));
+        document.head.appendChild(s);
+      });
+    }
+
+    // Save the YTD Real-Time Tracking card as a PNG image
+    async function exportYtdImage() {
+      const isZh = lang.value === 'zh';
+      try {
+        const el = document.getElementById('ytdTrackingCard');
+        if (!el) return;
+        const h2c = await loadHtml2Canvas();
+        const canvas = await h2c(el, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = `YTD_Tracking_${new Date().toISOString().slice(0, 10)}.png`;
+        a.click();
+      } catch (e) {
+        console.error(e);
+        alert(isZh ? '图片生成失败：' + e.message : 'Image export failed: ' + e.message);
+      }
+    }
+
     // Export ONLY the All-Team Commission Summary card as a printable PDF report
     function exportAllTeamComm() {
       const isZh = lang.value === 'zh';
@@ -2628,7 +2664,7 @@ th:first-child,td:first-child{text-align:left}
       lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
       t, fmtCurrency, fmtPct, fmtInt, fmtIntNoZero, parseNumInput, calcResult, customResult,
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal, tccAnnualComm, tccGrandComm,
-      weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary, exportAllTeamComm,
+      weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary, exportAllTeamComm, exportYtdImage,
       exportMemberExcel, exportAllExcel,
       saveToFile, loadFromFile, importRawData, importBdData, resetDefaults,
       memberActualQ, memberActualYTD,
