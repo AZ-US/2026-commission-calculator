@@ -1265,19 +1265,21 @@ function getMultiplier(attainment) {
 //   commission = actual × rate × multiplier
 //             = (attainment × target) × rate × multiplier
 function calcCommission(member, attainment, weights) {
-  // Manual-commission members (e.g. Robert) sit outside the plan formula —
-  // their revenueTarget only anchors qTargetShare math, never scenario commission
+  // Per-quarter targets respect qTargetShare (e.g. Emily and Robert split the company Q1/Q2 50/50)
+  const qTargets = weights.map((w, i) =>
+    member.revenueTarget * w * (member.qTargetShare ? (member.qTargetShare[i] ?? 1) : 1));
+  const effTarget = qTargets.reduce((a, b) => a + b, 0);
+  // Manual-commission members (Robert): target commission = flat rate on his Q1/Q2
+  // targets, no multiplier — actual payout stays whatever is entered manually
   if (member.manualCommission) {
-    return { multiplier: 0, annualCommission: 0, quarterly: [0,0,0,0], tcc: member.baseSalary };
+    const annualCommission = effTarget * attainment * member.rate;
+    const quarterly = qTargets.map(qt => qt * attainment * member.rate);
+    return { multiplier: 1, annualCommission, quarterly, tcc: member.baseSalary + annualCommission };
   }
   const multiplier = getMultiplier(attainment);
-  // Effective annual target respects per-quarter shares (e.g. Emily gives up 50% of Q1/Q2 to Robert)
-  const effTarget = member.qTargetShare
-    ? weights.reduce((s, w, i) => s + member.revenueTarget * w * (member.qTargetShare[i] ?? 1), 0)
-    : member.revenueTarget;
   const simulatedActual = effTarget * attainment;
   const annualCommission = simulatedActual * member.rate * multiplier;
-  const quarterly = weights.map(w => annualCommission * w);
+  const quarterly = qTargets.map(qt => qt * attainment * member.rate * multiplier);
   const tcc = member.baseSalary + annualCommission;
   return { multiplier, annualCommission, quarterly, tcc };
 }
