@@ -573,6 +573,15 @@ tr:hover td { background: #f8f9fa; }
         <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#e67700">
           📌 {{ t('BD 团队 — 子集（已含于 Account 总额内）', 'BD Team — Subset of Account (not additive)') }}
         </div>
+        <p style="font-size:12px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label style="background:#e67700;color:#fff;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:inline-block;white-space:nowrap">
+            📥 {{ t('导入 BD 数据 (Excel)', 'Import BD Data (Excel)') }}
+            <input type="file" class="hidden-input" accept=".xlsx,.xls" @change="importBdData">
+          </label>
+          <span style="color:var(--text-secondary)">
+            {{ t('上传 BD Commission Report，按 Jon / Dan / Dash 工作表自动汇总交易金额并写入对应季度（从文件名识别 Q1–Q4）；Account 团队不受影响。', 'Upload the BD Commission Report — deal amounts on the Jon / Dan / Dash sheets are summed into the matching quarter (detected from the file name); Account team is untouched.') }}
+          </span>
+        </p>
         <div style="overflow-x:auto">
           <table>
             <thead>
@@ -1665,6 +1674,66 @@ const app = createApp({
       e.target.value = '';
     }
 
+    // ===== BD commission report import (per-member deal sheets: Jon / Dan / Dash) =====
+    // Each member's sheet lists one deal per row; the row with an empty Record ID is the
+    // grand-total row and is skipped. Quarter comes from the file name (e.g. "Q1 BD ...").
+    const BD_IMPORT_SHEETS = [
+      { match: n => n.includes('jon'), id: 'jonathan' },
+      { match: n => n === 'dan' || n.includes('daniel'), id: 'daniel' },
+      { match: n => n.includes('dash'), id: 'dash' },
+    ];
+
+    function importBdData(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const isZh = lang.value === 'zh';
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const wb = XLSX.read(reader.result, { type: 'array' });
+          let q = (/(?:^|[^a-z0-9])Q([1-4])/i.exec(file.name) || [])[1];
+          if (!q) q = prompt(isZh ? '文件名里没有 Q1–Q4，请输入要写入的季度（1-4）：' : 'No quarter found in the file name. Enter the target quarter (1-4):');
+          q = parseInt(q, 10);
+          if (!(q >= 1 && q <= 4)) { alert(isZh ? '季度无效，已取消' : 'Invalid quarter — cancelled'); return; }
+
+          const allM = teams.flatMap(t => t.members);
+          const results = []; const missing = [];
+          for (const cfg of BD_IMPORT_SHEETS) {
+            const sheetName = wb.SheetNames.find(n => cfg.match(n.toLowerCase().trim()));
+            const m = allM.find(x => x.id === cfg.id);
+            if (!sheetName || !m) { missing.push(cfg.id); continue; }
+            const arr = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1 });
+            const hIdx = arr.findIndex(r => Array.isArray(r) && r.includes('Amount') && r.includes('Record ID'));
+            if (hIdx === -1) { missing.push(cfg.id); continue; }
+            const aCol = arr[hIdx].indexOf('Amount');
+            const idCol = arr[hIdx].indexOf('Record ID');
+            let total = 0, deals = 0;
+            for (let i = hIdx + 1; i < arr.length; i++) {
+              const r = arr[i];
+              if (!r || r[idCol] == null || r[idCol] === '') continue;
+              const v = parseFloat(r[aCol]);
+              if (!isFinite(v)) continue;
+              total += v; deals++;
+            }
+            results.push({ m, sheetName, total, deals });
+          }
+          if (!results.length) { alert(isZh ? '未找到 Jon / Dan / Dash 工作表' : 'No Jon / Dan / Dash sheets found'); return; }
+
+          let msg = isZh ? `从「${file.name}」解析出 Q${q} BD 数据，将写入：\n\n` : `Parsed Q${q} BD data from "${file.name}". Will write:\n\n`;
+          results.forEach(r => { msg += `${r.m.name} ← ${r.sheetName}（${r.deals} ${isZh ? '笔交易' : 'deals'}）: ${fmtCurrency(r.total)}\n`; });
+          if (missing.length) msg += '\n' + (isZh ? '未找到工作表：' : 'Sheets not found: ') + missing.join(', ') + '\n';
+          msg += '\n' + (isZh ? `确定写入？（只覆盖 BD 三人的 Q${q}，Account 团队不变）` : `Proceed? (Only the BD members' Q${q} is overwritten; Account team unchanged)`);
+          if (!confirm(msg)) return;
+          results.forEach(r => { r.m.quarterlyActual[q - 1] = Math.round(r.total * 100) / 100; });
+        } catch (err) {
+          console.error(err);
+          alert(isZh ? '解析失败：' + err.message : 'Import failed: ' + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      e.target.value = '';
+    }
+
     function resetDefaults() {
       if (!confirm(lang.value === 'zh' ? '确定重置为默认值？' : 'Reset to defaults?')) return;
       const dt = defaultTeams();
@@ -2412,7 +2481,7 @@ th:first-child,td:first-child{text-align:left}
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
       weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary,
       exportMemberExcel, exportAllExcel,
-      saveToFile, loadFromFile, importRawData, resetDefaults,
+      saveToFile, loadFromFile, importRawData, importBdData, resetDefaults,
       memberActualQ, memberActualYTD,
       accountDirector, bdDirector,
       accountQTarget, accountQActual, accountQAttainment,
