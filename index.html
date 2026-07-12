@@ -750,19 +750,21 @@ tr:hover td { background: #f8f9fa; }
             <tbody>
               <template v-for="team in teams">
                 <tr v-for="m in team.members" :key="m.id">
-                  <td><strong>{{ m.name }}</strong></td>
+                  <td><strong>{{ m.name }}</strong>
+                    <span v-if="m.manualCommission" style="display:block;font-size:10px;color:var(--text-secondary)">{{ t('B&H 实际提成 (Q1+Q2)', 'B&H actual (Q1+Q2)') }}</span>
+                  </td>
                   <td>{{ fmtCurrency(m.baseSalary) }}</td>
-                  <td>{{ fmtCurrency(calcResult(m, 1).annualCommission) }}</td>
-                  <td><strong>{{ fmtCurrency(calcResult(m, 1).tcc) }}</strong></td>
-                  <td>{{ fmtPct(calcResult(m, 1).annualCommission / calcResult(m, 1).tcc) }}</td>
+                  <td>{{ fmtCurrency(tccAnnualComm(m)) }}</td>
+                  <td><strong>{{ fmtCurrency(m.baseSalary + tccAnnualComm(m)) }}</strong></td>
+                  <td>{{ fmtPct(tccAnnualComm(m) / (m.baseSalary + tccAnnualComm(m))) }}</td>
                 </tr>
               </template>
               <tr style="font-weight:700; border-top:2px solid var(--border)">
                 <td>{{ t('全部合计', 'Grand Total') }}</td>
                 <td>{{ fmtCurrency(grandBaseTotal) }}</td>
-                <td>{{ fmtCurrency(grandCommTotal(1)) }}</td>
-                <td>{{ fmtCurrency(grandBaseTotal + grandCommTotal(1)) }}</td>
-                <td>{{ fmtPct(grandCommTotal(1) / (grandBaseTotal + grandCommTotal(1))) }}</td>
+                <td>{{ fmtCurrency(tccGrandComm) }}</td>
+                <td>{{ fmtCurrency(grandBaseTotal + tccGrandComm) }}</td>
+                <td>{{ fmtPct(tccGrandComm / (grandBaseTotal + tccGrandComm)) }}</td>
               </tr>
             </tbody>
           </table>
@@ -782,7 +784,7 @@ tr:hover td { background: #f8f9fa; }
       <div class="card" v-if="contributorMembers.length > 0">
         <div class="card-title">🤝 {{ t('贡献者收入（计入 Account 完成率）', 'Contributor Revenue (Counts toward Account attainment)') }}</div>
         <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">
-          {{ t('这些同事维护特定客户，实际收入会自动加到 Account 团队总完成率里。Robert 已离职：提成金额在他的页面手动录入（参考 BH 对账表，0.075% 无乘数），仅 Q1、Q2；收入完成额不受影响。', 'These members maintain specific accounts; their revenue is added to the Account team attainment. Robert has resigned: his commission is entered manually on his tab (per the BH reconciliation, flat 0.075%, no multiplier), Q1 & Q2 only; his revenue attribution is unaffected.') }}
+          {{ t('这些同事维护特定客户，实际收入会自动加到 Account 团队总完成率里。Robert 已离职：提成按 B&H 实际收入 × 0.075%（无乘数）由原始数据导入自动生成，仅 Q1、Q2；收入完成额不受影响。', 'These members maintain specific accounts; their revenue is added to the Account team attainment. Robert has resigned: his commission (B&H actual revenue × 0.075%, no multiplier) is generated automatically from imported raw data, Q1 & Q2 only; his revenue attribution is unaffected.') }}
         </p>
         <div style="overflow-x:auto">
           <table>
@@ -1082,7 +1084,13 @@ tr:hover td { background: #f8f9fa; }
                   <tbody>
                     <tr v-for="qi in 4" :key="'act'+qi">
                       <td><strong>Q{{ qi }}</strong> <span style="font-size:11px;color:var(--text-secondary)">({{ fmtPct(quarterlyWeights[qi-1]) }})</span></td>
-                      <td>{{ fmtCurrency(memberActualQ(m,qi-1).qTarget) }}</td>
+                      <td>
+                        {{ fmtCurrency(memberActualQ(m,qi-1).qTarget) }}
+                        <div v-if="m.id === 'emily' && qi >= 3" style="font-size:10px;color:var(--text-secondary);line-height:1.5">
+                          B&H: {{ fmtCurrency(memberActualQ(m,qi-1).qTarget * 0.5) }}<br>
+                          Others: {{ fmtCurrency(memberActualQ(m,qi-1).qTarget * 0.5) }}
+                        </div>
+                      </td>
                       <td style="background:#f1f8f1">
                         <div style="display:flex;align-items:center;gap:4px">
                           <span>$</span>
@@ -1166,9 +1174,9 @@ tr:hover td { background: #f8f9fa; }
                 <p>{{ t('年度提成 (100%)', 'Annual Commission (100%)') }} = {{ fmtCurrency(m.revenueTarget) }} × {{ (m.rate * 100).toFixed(4) }}% × 1.00 = <strong>{{ fmtCurrency(calcResult(m, 1).annualCommission) }}</strong></p>
               </div>
               <div v-else-if="m.manualCommission" style="font-size:13px; line-height:2">
-                <p><strong>Commission</strong> = {{ t('手动录入的提成金额（上表黄色输入框）', 'Manually entered amount (yellow inputs above)') }}</p>
-                <p>{{ t('参考口径：BH 实际收入 × 0.075%，无收入乘数', 'Reference basis: BH actual revenue × 0.075%, no revenue multiplier') }}</p>
-                <p>{{ t('已离职 — 仅 Q1、Q2 录入提成；收入仍照常计入 Account 完成率', 'Resigned — commission entered for Q1 & Q2 only; revenue still counts toward Account attainment') }}</p>
+                <p><strong>Commission</strong> = {{ t('B&H 实际收入 × 0.075%，无收入乘数', 'B&H actual revenue × 0.075%, no revenue multiplier') }}</p>
+                <p>{{ t('结果由原始数据导入后按提成计算逻辑自动生成（上表金额可按财务核定校准）', 'Generated automatically from imported raw data per the commission logic (amounts above adjustable per finance verification)') }}</p>
+                <p>{{ t('仅 Q1、Q2 计提；收入仍照常计入 Account 完成率', 'Q1 & Q2 only; revenue still counts toward Account attainment') }}</p>
               </div>
               <div v-else style="font-size:13px; line-height:2">
                 <p><strong>Commission</strong> = {{ t('个人收入目标', 'Revenue Quota') }} × Commission Rate × Revenue Multiplier</p>
@@ -1177,7 +1185,7 @@ tr:hover td { background: #f8f9fa; }
               </div>
               <p style="font-size:12px; color:var(--text-secondary); margin-top:8px">
                 {{ m.manualCommission
-                   ? t('季度提成 = 手动录入金额 | 结算周期：季末后30天内发放', 'Quarterly Commission = manually entered amount | Settlement: within 30 days after quarter-end')
+                   ? t('季度提成通过原始数据导入，自动按提成计算逻辑生成结果 | 结算周期：季末后30天内发放', 'Quarterly Commission is generated automatically from imported raw data per the commission logic | Settlement: within 30 days after quarter-end')
                    : t('季度提成 = 年度提成 × 季度权重 | 结算周期：季末后30天内发放', 'Quarterly Commission = Annual Commission × Quarterly Weight | Settlement: within 30 days after quarter-end') }}
               </p>
             </div>
@@ -1265,21 +1273,22 @@ function getMultiplier(attainment) {
 //   commission = actual × rate × multiplier
 //             = (attainment × target) × rate × multiplier
 function calcCommission(member, attainment, weights) {
-  // Per-quarter targets respect qTargetShare (e.g. Emily and Robert split the company Q1/Q2 50/50)
-  const qTargets = weights.map((w, i) =>
-    member.revenueTarget * w * (member.qTargetShare ? (member.qTargetShare[i] ?? 1) : 1));
-  const effTarget = qTargets.reduce((a, b) => a + b, 0);
-  // Manual-commission members (Robert): target commission = flat rate on his Q1/Q2
-  // targets, no multiplier — actual payout stays whatever is entered manually
+  // Manual-commission members (Robert): target commission = flat rate on his
+  // qTargetShare-adjusted Q1/Q2 targets, no multiplier — actual payout stays manual
   if (member.manualCommission) {
+    const qTargets = weights.map((w, i) =>
+      member.revenueTarget * w * (member.qTargetShare ? (member.qTargetShare[i] ?? 1) : 1));
+    const effTarget = qTargets.reduce((a, b) => a + b, 0);
     const annualCommission = effTarget * attainment * member.rate;
     const quarterly = qTargets.map(qt => qt * attainment * member.rate);
     return { multiplier: 1, annualCommission, quarterly, tcc: member.baseSalary + annualCommission };
   }
+  // Regular members (incl. Emily) use the FULL annual base — the Q1/Q2 qTargetShare
+  // halving only affects quarterly attainment tracking, not the annual plan tiers
   const multiplier = getMultiplier(attainment);
-  const simulatedActual = effTarget * attainment;
+  const simulatedActual = member.revenueTarget * attainment;
   const annualCommission = simulatedActual * member.rate * multiplier;
-  const quarterly = qTargets.map(qt => qt * attainment * member.rate * multiplier);
+  const quarterly = weights.map(w => annualCommission * w);
   const tcc = member.baseSalary + annualCommission;
   return { multiplier, annualCommission, quarterly, tcc };
 }
@@ -1448,7 +1457,16 @@ const app = createApp({
     const ytdBdTeamComm          = computed(() => [0,1,2,3].reduce((s, qi) => s + bdTeamCommQ(qi), 0));
 
     // Target commission at 100% attainment — used to compute "提成发放比例" (commission payout ratio)
-    const targetCommAccount = computed(() => teams[0].members.reduce((s, m) => s + calcResult(m, 1).annualCommission, 0));
+    // Planned (100%) Account commission = regular plan members only ($88,531);
+    // Robert's manual B&H commission is outside the plan pool
+    const targetCommAccount = computed(() => teams[0].members.reduce((s, m) => s + (m.manualCommission ? 0 : calcResult(m, 1).annualCommission), 0));
+
+    // TCC summary: manual-commission members (Robert) show their actual entered
+    // Q1+Q2 total as annual commission, not a simulated plan figure
+    function tccAnnualComm(m) {
+      return m.manualCommission ? m.manualCommission.reduce((a, b) => a + (b || 0), 0) : calcResult(m, 1).annualCommission;
+    }
+    const tccGrandComm = computed(() => teams.flatMap(t => t.members).reduce((s, m) => s + tccAnnualComm(m), 0));
     const targetCommBd      = computed(() => teams[1].members.reduce((s, m) => s + calcResult(m, 1).annualCommission, 0));
     const targetCommTotal   = computed(() => targetCommAccount.value + targetCommBd.value);
     const payoutRatioAccount = computed(() => targetCommAccount.value > 0 ? ytdAccountTeamComm.value / targetCommAccount.value : 0);
@@ -2505,7 +2523,7 @@ th:first-child,td:first-child{text-align:left}
       authenticated, passwordInput, loginError, doLogin,
       lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
       t, fmtCurrency, fmtPct, fmtInt, fmtIntNoZero, parseNumInput, calcResult, customResult,
-      teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
+      teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal, tccAnnualComm, tccGrandComm,
       weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary,
       exportMemberExcel, exportAllExcel,
       saveToFile, loadFromFile, importRawData, importBdData, resetDefaults,
