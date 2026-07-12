@@ -1765,12 +1765,14 @@ const app = createApp({
       e.target.value = '';
     }
 
-    // ===== BD commission report import (per-member deal sheets: Jon / Dan / Dash) =====
-    // Each member's sheet lists one deal per row; the row with an empty Record ID is the
-    // grand-total row and is skipped. Quarter comes from the file name (e.g. "Q1 BD ...").
+    // ===== BD commission report import (per-member deal sheets) =====
+    // Known formats: Q1 "BizDev Total (Jon)" / "Dan" / "Dash" (has a Record ID column;
+    // grand-total row has none) and Q2 "JM Q2 Deals" / "Daniel Q2 Deals" / "Dash Q2 Deals"
+    // (no Record ID — anchor on Deal Name; a "TOTAL:" row follows the data and is skipped).
+    // Quarter comes from the file name (e.g. "... Q2 2026.xlsx").
     const BD_IMPORT_SHEETS = [
-      { match: n => n.includes('jon'), id: 'jonathan' },
-      { match: n => n === 'dan' || n.includes('daniel'), id: 'daniel' },
+      { match: n => n.includes('jon') || /\bjm\b/.test(n), id: 'jonathan' },
+      { match: n => /^dan\b/.test(n) || n.includes('daniel'), id: 'daniel' },
       { match: n => n.includes('dash'), id: 'dash' },
     ];
 
@@ -1794,14 +1796,15 @@ const app = createApp({
             const m = allM.find(x => x.id === cfg.id);
             if (!sheetName || !m) { missing.push(cfg.id); continue; }
             const arr = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1 });
-            const hIdx = arr.findIndex(r => Array.isArray(r) && r.includes('Amount') && r.includes('Record ID'));
+            const hIdx = arr.findIndex(r => Array.isArray(r) && r.includes('Amount') && (r.includes('Record ID') || r.includes('Deal Name')));
             if (hIdx === -1) { missing.push(cfg.id); continue; }
             const aCol = arr[hIdx].indexOf('Amount');
-            const idCol = arr[hIdx].indexOf('Record ID');
+            const anchorCol = arr[hIdx].indexOf('Record ID') !== -1 ? arr[hIdx].indexOf('Record ID') : arr[hIdx].indexOf('Deal Name');
             let total = 0, deals = 0;
             for (let i = hIdx + 1; i < arr.length; i++) {
               const r = arr[i];
-              if (!r || r[idCol] == null || r[idCol] === '') continue;
+              if (!r || r[anchorCol] == null || r[anchorCol] === '') continue;   // blank / pivot rows
+              if (/^\s*total\b/i.test(String(r[anchorCol]))) continue;          // "TOTAL:" summary row
               const v = parseFloat(r[aCol]);
               if (!isFinite(v)) continue;
               total += v; deals++;
