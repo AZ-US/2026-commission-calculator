@@ -987,7 +987,7 @@ tr:hover td { background: #f8f9fa; }
                   </div>
                 </div>
                 <div class="param-item">
-                  <span class="param-label">{{ m.role === 'director' ? t('团队收入目标', 'Team Revenue Target') : t('个人收入目标', 'Revenue Quota') }}</span>
+                  <span class="param-label">{{ m.role === 'director' ? t('团队收入目标', 'Team Revenue Target') : t('个人收入目标', 'Revenue Quota') }}<span v-if="m.qTargetShare" style="display:block;font-size:10px;color:#e67700">{{ m.id === 'robert' ? t('（基数=公司总收入；个人目标 = Q1、Q2 各占 50%）', '(base = company total; personal target = 50% of Q1 & Q2)') : t('（个人目标：Q1、Q2 减半，另一半在 Robert 名下）', '(personal target: Q1 & Q2 halved — other half under Robert)') }}</span></span>
                   <div style="display:flex;align-items:center;gap:4px">
                     <span>$</span>
                     <input class="editable-input" type="text" inputmode="numeric" style="width:160px"
@@ -1082,7 +1082,7 @@ tr:hover td { background: #f8f9fa; }
                   <tbody>
                     <tr v-for="qi in 4" :key="'act'+qi">
                       <td><strong>Q{{ qi }}</strong> <span style="font-size:11px;color:var(--text-secondary)">({{ fmtPct(quarterlyWeights[qi-1]) }})</span></td>
-                      <td>{{ fmtCurrency(m.revenueTarget * quarterlyWeights[qi-1]) }}</td>
+                      <td>{{ fmtCurrency(memberActualQ(m,qi-1).qTarget) }}</td>
                       <td style="background:#f1f8f1">
                         <div style="display:flex;align-items:center;gap:4px">
                           <span>$</span>
@@ -1094,7 +1094,7 @@ tr:hover td { background: #f8f9fa; }
                         </div>
                       </td>
                       <td>
-                        <span v-if="m.revenueTarget * quarterlyWeights[qi-1] > 0"
+                        <span v-if="memberActualQ(m,qi-1).qTarget > 0"
                               :style="memberActualQ(m,qi-1).attainment >= 1 ? 'color:#34a853;font-weight:600' : memberActualQ(m,qi-1).attainment >= 0.86 ? 'color:#fbbc04;font-weight:600' : 'color:#ea4335;font-weight:600'">
                           {{ fmtPct(memberActualQ(m,qi-1).attainment) }}
                         </span>
@@ -1115,7 +1115,7 @@ tr:hover td { background: #f8f9fa; }
                     </tr>
                     <tr style="font-weight:700;border-top:2px solid var(--primary);background:#f8f9fa">
                       <td>{{ t('累计 YTD', 'YTD Total') }}</td>
-                      <td>{{ fmtCurrency(m.revenueTarget) }}</td>
+                      <td>{{ fmtCurrency(memberActualYTD(m).totalTarget) }}</td>
                       <td style="background:#e8f5e9">{{ fmtCurrency(memberActualYTD(m).totalActual) }}</td>
                       <td :style="memberActualYTD(m).ytdAttainment >= 1 ? 'color:#34a853' : memberActualYTD(m).ytdAttainment >= 0.86 ? 'color:#fbbc04' : 'color:#ea4335'">
                         {{ m.revenueTarget > 0 ? fmtPct(memberActualYTD(m).ytdAttainment) : '—' }}
@@ -1214,13 +1214,19 @@ function defaultTeams() {
     {
       key: 'account', nameZh: '客户团队', nameEn: 'Account Team',
       members: [
-        { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, ref2025Commission: 6000, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
+        // Emily's revenueTarget is the company annual total (anchor for all company-level math).
+        // qTargetShare: B&H sits under Robert in Q1+Q2, worth ~50% of those quarters — Emily's
+        // personal Q1/Q2 target is halved; Robert carries the other half. Company totals unchanged.
+        { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, qTargetShare: [0.5, 0.5, 1, 1], ref2025Commission: 6000, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
         { id: 'nancy', name: 'Nancy', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 120000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 20516, quarterlyActual: [0,0,0,0] },
         { id: 'justin', name: 'Justin', titleZh: '客户经理', titleEn: 'Account Mgr', role: 'individual', baseSalary: 75000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 21129, quarterlyActual: [0,0,0,0] },
         // Robert (resigned): commission entered MANUALLY per quarter from the BH reconciliation
         // (ref 0.075% flat, no multiplier). Only Q1+Q2 apply. His revenue still counts toward
         // Account attainment via quarterlyActual, which is independent of the commission entry.
-        { id: 'robert', name: 'Robert (B&H)', titleZh: '副总裁 · B&H 客户', titleEn: 'VP · B&H Accounts', role: 'contributor', baseSalary: 160000, rate: 0.00075, manualCommission: [3989.44, 7203.98, 0, 0], revenueTarget: 0, ref2025Commission: 29664, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
+        // revenueTarget mirrors the company annual so qTargetShare can give him 50% of the
+        // company Q1/Q2 target (the B&H half taken off Emily); calcCommission ignores it for
+        // manual-commission members, so scenario/TCC tables still show him at $0.
+        { id: 'robert', name: 'Robert (B&H)', titleZh: '副总裁 · B&H 客户', titleEn: 'VP · B&H Accounts', role: 'contributor', baseSalary: 160000, rate: 0.00075, manualCommission: [3989.44, 7203.98, 0, 0], revenueTarget: 63236128, qTargetShare: [0.5, 0.5, 0, 0], ref2025Commission: 29664, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
       ]
     },
     {
@@ -1259,8 +1265,17 @@ function getMultiplier(attainment) {
 //   commission = actual × rate × multiplier
 //             = (attainment × target) × rate × multiplier
 function calcCommission(member, attainment, weights) {
+  // Manual-commission members (e.g. Robert) sit outside the plan formula —
+  // their revenueTarget only anchors qTargetShare math, never scenario commission
+  if (member.manualCommission) {
+    return { multiplier: 0, annualCommission: 0, quarterly: [0,0,0,0], tcc: member.baseSalary };
+  }
   const multiplier = getMultiplier(attainment);
-  const simulatedActual = member.revenueTarget * attainment;
+  // Effective annual target respects per-quarter shares (e.g. Emily gives up 50% of Q1/Q2 to Robert)
+  const effTarget = member.qTargetShare
+    ? weights.reduce((s, w, i) => s + member.revenueTarget * w * (member.qTargetShare[i] ?? 1), 0)
+    : member.revenueTarget;
+  const simulatedActual = effTarget * attainment;
   const annualCommission = simulatedActual * member.rate * multiplier;
   const quarterly = weights.map(w => annualCommission * w);
   const tcc = member.baseSalary + annualCommission;
@@ -1270,7 +1285,10 @@ function calcCommission(member, attainment, weights) {
 // Actual commission per quarter — uniform formula: actual × rate × multiplier
 // If actual revenue not entered (= 0), commission = 0 (no calculation)
 function calcActualQuarter(member, qi, weights) {
-  const qTarget = member.revenueTarget * weights[qi];
+  // qTargetShare lets a quarter's target deviate from the plain weight split
+  // (Emily/Robert each carry 50% of the company Q1/Q2 target — the B&H split)
+  const share = member.qTargetShare ? (member.qTargetShare[qi] ?? 1) : 1;
+  const qTarget = member.revenueTarget * weights[qi] * share;
   const actual = (member.quarterlyActual || [0,0,0,0])[qi] || 0;
   // Manual-commission members (e.g. Robert): the entered amount IS the commission,
   // independent of revenue/multiplier. Revenue still reports for attainment.
@@ -1290,10 +1308,11 @@ function calcActualQuarter(member, qi, weights) {
 
 // YTD totals for one member
 function calcActualYTD(member, weights) {
-  let totalActual = 0, totalTarget = member.revenueTarget, totalCommission = 0;
+  let totalActual = 0, totalTarget = 0, totalCommission = 0;
   for (let qi = 0; qi < 4; qi++) {
     const r = calcActualQuarter(member, qi, weights);
     totalActual += r.actual;
+    totalTarget += r.qTarget;   // sums to revenueTarget unless qTargetShare shifts quarters
     totalCommission += r.commission;
   }
   const ytdAttainment = totalTarget > 0 ? totalActual / totalTarget : 0;
@@ -1496,6 +1515,12 @@ const app = createApp({
                 // plan (noMultiplier) — get the defaults; the flags are retired.
                 if (target.id === 'robert') {
                   if (/\(TBD\)/i.test(target.name || '')) target.name = 'Robert (B&H)';
+                  // Snapshots saved before the B&H target split carry revenueTarget 0 and no
+                  // qTargetShare — re-apply so Robert holds 50% of the company Q1/Q2 target
+                  if (!('qTargetShare' in sm)) {
+                    target.revenueTarget = 63236128;
+                    target.qTargetShare = [0.5, 0.5, 0, 0];
+                  }
                   delete target.noMultiplier;
                   delete target.commQuarters;
                   if (!('manualCommission' in sm)) {
@@ -2056,7 +2081,7 @@ th:first-child,td:first-child{text-align:left}
           html += `<h2>${isZh ? '基本信息' : 'Basic Info'}</h2><table>
 <tr><td>${isZh?'底薪':'Base Salary'}</td><td>${fmtCurrency(m.baseSalary)}</td></tr>
 <tr><td>${isZh?'提成比例':'Commission Rate'}</td><td>${(m.rate*100).toFixed(4)}%</td></tr>
-<tr><td>${isZh?'收入目标':'Revenue Target'}</td><td>${fmtCurrency(m.revenueTarget)}</td></tr>
+<tr><td>${isZh?'收入目标':'Revenue Target'}</td><td>${fmtCurrency(memberActualYTD(m).totalTarget)}</td></tr>
 ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><td>${fmtCurrency(m.ref2025Commission)}</td></tr>` : ''}
 </table>`;
         }
@@ -2119,11 +2144,11 @@ ${m.ref2025Commission ? `<tr><td>${isZh?'2025年提成':'2025 Commission'}</td><
                  isZh?'完成率':'Attainment', isZh?'乘数':'Multiplier', isZh?'实际提成':'Earned Commission']);
       for (let qi = 0; qi < 4; qi++) {
         const r = memberActualQ(m, qi);
-        rows.push([`Q${qi+1}`, m.revenueTarget * quarterlyWeights[qi],
+        rows.push([`Q${qi+1}`, r.qTarget,
           m.quarterlyActual[qi] || 0, r.entered ? r.attainment : '', r.entered ? r.multiplier : '', r.commission]);
       }
       const ytd = memberActualYTD(m);
-      rows.push([isZh?'YTD合计':'YTD Total', m.revenueTarget, ytd.totalActual,
+      rows.push([isZh?'YTD合计':'YTD Total', ytd.totalTarget, ytd.totalActual,
         ytd.totalActual > 0 ? ytd.ytdAttainment : '', '', ytd.totalCommission]);
       return rows;
     }
@@ -2362,7 +2387,7 @@ th:first-child,td:first-child{text-align:left}
 <div class="info-grid">
   <div><span>${isZh?'底薪':'Base Salary'}</span><strong>${fmtCurrency(m.baseSalary)}</strong></div>
   <div><span>${isZh?'提成比例':'Commission Rate'}</span><strong>${(m.rate*100).toFixed(4)}%</strong></div>
-  <div><span>${isZh?'年度收入目标':'Annual Revenue Target'}</span><strong>${fmtCurrency(m.revenueTarget)}</strong></div>
+  <div><span>${isZh?'年度收入目标':'Annual Revenue Target'}</span><strong>${fmtCurrency(ytd.totalTarget)}</strong></div>
   <div><span>${isZh?'年度目标提成 (100%)':'Annual Target Commission (100%)'}</span><strong>${fmtCurrency(calcResult(m,1).annualCommission)}</strong></div>
 </div>
 
