@@ -644,7 +644,13 @@ tr:hover td { background: #f8f9fa; }
 
       <!-- All-Team Commission Summary -->
       <div class="card">
-        <div class="card-title">💰 {{ t('全团队实际提成汇总 All-Team (Account + BD) Commission Summary', 'All-Team (Account + BD) Commission Summary') }}</div>
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <span>💰 {{ t('全团队实际提成汇总 All-Team (Account + BD) Commission Summary', 'All-Team (Account + BD) Commission Summary') }}</span>
+          <button @click="exportAllTeamComm" :title="t('打开打印窗口，可选「存储为 PDF」', 'Open print dialog → Save as PDF')"
+                  style="font-size:12px;padding:6px 12px;background:#1a73e8;color:#fff;border:1px solid #1a73e8;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap">
+            📕 {{ t('导出 PDF', 'Export PDF') }}
+          </button>
+        </div>
         <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">
           {{ t('基于各员工页面输入的实际季度收入计算，未输入则显示 $0', 'Calculated from actual revenue entered in each employee tab; shows $0 if not yet entered') }}
         </p>
@@ -2093,6 +2099,55 @@ const app = createApp({
       URL.revokeObjectURL(a.href);
     }
 
+    // Export ONLY the All-Team Commission Summary card as a printable PDF report
+    function exportAllTeamComm() {
+      const isZh = lang.value === 'zh';
+      const dateStr = new Date().toISOString().slice(0, 10);
+      let rows = '';
+      teams.forEach(team => team.members.forEach(m => {
+        const qCells = [0,1,2,3].map(qi =>
+          `<td style="${(m.quarterlyActual[qi] > 0) ? 'background:#e8f5e9;font-weight:600' : 'color:#aaa'}">${fmtCurrency(memberCommQ(m, qi))}</td>`).join('');
+        const status = [0,1,2,3].map(qi =>
+          `<span style="color:${m.quarterlyActual[qi] > 0 ? '#34a853' : '#ccc'}">Q${qi+1}${m.quarterlyActual[qi] > 0 ? '✓' : '○'}</span>`).join(' ');
+        rows += `<tr>
+          <td><strong>${m.name}</strong></td>
+          <td>${team.key.toUpperCase()}</td>
+          ${qCells}
+          <td style="font-weight:700;color:#1a73e8">${fmtCurrency(memberCommYTD(m))}</td>
+          <td style="font-size:11px;white-space:nowrap">${status}</td>
+        </tr>`;
+      }));
+      const totCells = [0,1,2,3].map(qi => `<td>${fmtCurrency(allCommissionQ(qi))}</td>`).join('');
+      const title = isZh ? '全团队实际提成汇总 All-Team (Account + BD) Commission Summary' : 'All-Team (Account + BD) Commission Summary';
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;margin:24px;color:#202124}
+h1{font-size:18px;margin-bottom:4px}
+.meta{font-size:12px;color:#5f6368;margin-bottom:16px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border:1px solid #dadce0;padding:6px 10px;text-align:left}
+th{background:#f8f9fa}
+.totals{font-weight:700;border-top:2px solid #1a73e8;background:#f8f9fa}
+.footer{margin-top:14px;font-size:11px;color:#5f6368}
+@media print{body{margin:0;padding:16px}}
+</style></head><body>
+<h1>💰 ${title}</h1>
+<div class="meta">${isZh?'生成日期':'Generated'}: ${dateStr} · ${isZh?'基于各员工录入的实际季度收入计算':'Calculated from actual quarterly revenue entered per employee'}</div>
+<table>
+  <thead><tr>
+    <th>${isZh?'姓名':'Name'}</th><th>${isZh?'团队':'Team'}</th>
+    <th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th>
+    <th>${isZh?'全年合计':'Annual Total'}</th><th>${isZh?'录入状态':'Input Status'}</th>
+  </tr></thead>
+  <tbody>
+    ${rows}
+    <tr class="totals"><td colspan="2">${isZh?'合计':'Total'}</td>${totCells}<td style="color:#1a73e8">${fmtCurrency(ytdActualCommission.value)}</td><td></td></tr>
+  </tbody>
+</table>
+<div class="footer">${isZh?'本报告为内部参考，最终金额以财务核定为准。':'For internal reference. Final payout subject to finance verification.'}</div>
+</body></html>`;
+      saveReport(html, `All_Team_Commission_Summary_${dateStr}`, 'pdf');
+    }
+
     function exportEmployee(member) {
       const isZh = lang.value === 'zh';
       const allMembers = teams.flatMap(t => t.members);
@@ -2573,7 +2628,7 @@ th:first-child,td:first-child{text-align:left}
       lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
       t, fmtCurrency, fmtPct, fmtInt, fmtIntNoZero, parseNumInput, calcResult, customResult,
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal, tccAnnualComm, tccGrandComm,
-      weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary,
+      weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary, exportAllTeamComm,
       exportMemberExcel, exportAllExcel,
       saveToFile, loadFromFile, importRawData, importBdData, resetDefaults,
       memberActualQ, memberActualYTD,
