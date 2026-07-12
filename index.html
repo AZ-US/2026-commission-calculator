@@ -1092,7 +1092,29 @@ tr:hover td { background: #f8f9fa; }
                         </div>
                       </td>
                       <td style="background:#f1f8f1">
-                        <div style="display:flex;align-items:center;gap:4px">
+                        <!-- Emily Q3/Q4: actuals entered as B&H + Others branches, summed below -->
+                        <div v-if="m.bhActualQ && qi >= 3" style="display:flex;flex-direction:column;gap:3px">
+                          <div style="display:flex;align-items:center;gap:4px;font-size:11px">
+                            <span style="min-width:42px;color:var(--text-secondary)">B&H</span><span>$</span>
+                            <input class="editable-input" type="text" inputmode="numeric" style="width:110px;background:#e8f5e9;font-size:11px"
+                                   :value="fmtIntNoZero(m.bhActualQ[qi-1])"
+                                   @input="m.bhActualQ[qi-1] = parseNumInput($event.target.value); m.quarterlyActual[qi-1] = (m.bhActualQ[qi-1]||0) + (m.othersActualQ[qi-1]||0)"
+                                   @focus="$event.target.select()"
+                                   placeholder="0">
+                          </div>
+                          <div style="display:flex;align-items:center;gap:4px;font-size:11px">
+                            <span style="min-width:42px;color:var(--text-secondary)">Others</span><span>$</span>
+                            <input class="editable-input" type="text" inputmode="numeric" style="width:110px;background:#e8f5e9;font-size:11px"
+                                   :value="fmtIntNoZero(m.othersActualQ[qi-1])"
+                                   @input="m.othersActualQ[qi-1] = parseNumInput($event.target.value); m.quarterlyActual[qi-1] = (m.bhActualQ[qi-1]||0) + (m.othersActualQ[qi-1]||0)"
+                                   @focus="$event.target.select()"
+                                   placeholder="0">
+                          </div>
+                          <div style="font-size:11px;font-weight:700;border-top:1px dashed #b7dfb9;padding-top:3px">
+                            {{ t('合计', 'Total') }}: {{ fmtCurrency(m.quarterlyActual[qi-1] || 0) }}
+                          </div>
+                        </div>
+                        <div v-else style="display:flex;align-items:center;gap:4px">
                           <span>$</span>
                           <input class="editable-input" type="text" inputmode="numeric" style="width:140px;background:#e8f5e9"
                                  :value="fmtIntNoZero(m.quarterlyActual[qi-1])"
@@ -1107,6 +1129,11 @@ tr:hover td { background: #f8f9fa; }
                           {{ fmtPct(memberActualQ(m,qi-1).attainment) }}
                         </span>
                         <span v-else style="color:var(--text-secondary)">—</span>
+                        <!-- branch attainment vs each 50% share — informational, the overall % above is unchanged -->
+                        <div v-if="m.bhActualQ && qi >= 3 && memberActualQ(m,qi-1).qTarget > 0" style="font-size:10px;color:var(--text-secondary);line-height:1.5">
+                          B&H: {{ fmtPct((m.bhActualQ[qi-1] || 0) / (memberActualQ(m,qi-1).qTarget * 0.5)) }}<br>
+                          Others: {{ fmtPct((m.othersActualQ[qi-1] || 0) / (memberActualQ(m,qi-1).qTarget * 0.5)) }}
+                        </div>
                       </td>
                       <td>×{{ memberActualQ(m,qi-1).multiplier.toFixed(2) }}</td>
                       <td style="font-weight:700">
@@ -1225,7 +1252,10 @@ function defaultTeams() {
         // Emily's revenueTarget is the company annual total (anchor for all company-level math).
         // qTargetShare: B&H sits under Robert in Q1+Q2, worth ~50% of those quarters — Emily's
         // personal Q1/Q2 target is halved; Robert carries the other half. Company totals unchanged.
-        { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, qTargetShare: [0.5, 0.5, 1, 1], ref2025Commission: 6000, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
+        // bhActualQ/othersActualQ: Q3+Q4 actuals are entered as two branches (B&H is back
+        // under Emily after Robert's departure); quarterlyActual holds their sum and stays
+        // the single source for attainment/commission math
+        { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, qTargetShare: [0.5, 0.5, 1, 1], bhActualQ: [0,0,0,0], othersActualQ: [0,0,0,0], ref2025Commission: 6000, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
         { id: 'nancy', name: 'Nancy', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 120000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 20516, quarterlyActual: [0,0,0,0] },
         { id: 'justin', name: 'Justin', titleZh: '客户经理', titleEn: 'Account Mgr', role: 'individual', baseSalary: 75000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 21129, quarterlyActual: [0,0,0,0] },
         // Robert (resigned): commission entered MANUALLY per quarter from the BH reconciliation
@@ -1561,6 +1591,13 @@ const app = createApp({
                   if (!target.quarterlyNotes) target.quarterlyNotes = ['','','',''];
                   sm.quarterlyNotes.forEach((v, i) => { target.quarterlyNotes[i] = v; });
                 }
+                // Emily's Q3/Q4 branch actuals (B&H / Others) — keep arrays reactive
+                ['bhActualQ', 'othersActualQ'].forEach(key => {
+                  if (sm[key] && Array.isArray(sm[key])) {
+                    if (!target[key]) target[key] = [0,0,0,0];
+                    sm[key].forEach((v, i) => { target[key][i] = v; });
+                  }
+                });
               }
             });
           }
@@ -1652,17 +1689,19 @@ const app = createApp({
           if (!monthCols.length) { alert(isZh ? '未找到月度收入列（如 net_sales_usd-2601）' : 'No monthly revenue columns found (e.g. net_sales_usd-2601)'); return; }
           const quartersInFile = [...new Set(monthCols.map(c => c.quarter))].sort();
 
-          const byRep = {}; const grand = [0, 0, 0, 0];
+          const byRep = {}; const grand = [0, 0, 0, 0]; const bhCustomer = [0, 0, 0, 0];
           for (let i = headerIdx + 1; i < rows.length; i++) {
             const r = rows[i];
             if (!r || !r[custCol] || !r[repCol]) continue;
             const rep = String(r[repCol]).trim();
+            const isBh = /^\s*BH PHOTO/i.test(String(r[custCol]));
             if (!byRep[rep]) byRep[rep] = [0, 0, 0, 0];
             for (const mc of monthCols) {
               const v = parseFloat(r[mc.col]);
               if (!isFinite(v)) continue;
               byRep[rep][mc.quarter - 1] += v;
               grand[mc.quarter - 1] += v;
+              if (isBh) bhCustomer[mc.quarter - 1] += v;
             }
           }
 
@@ -1705,7 +1744,14 @@ const app = createApp({
           msg += '\n' + (isZh ? '确定写入？（只覆盖上述人员的这些季度，BD 三人不变）' : 'Proceed? (Only these members/quarters are overwritten; BD members unchanged)');
           if (!confirm(msg)) return;
 
-          if (emily) quartersInFile.forEach(q => { emily.quarterlyActual[q - 1] = round2(emilyQs[q - 1]); });
+          if (emily) quartersInFile.forEach(q => {
+            emily.quarterlyActual[q - 1] = round2(emilyQs[q - 1]);
+            // Q3/Q4 branch inputs stay in sync: B&H from BH PHOTO VIDEO rows, Others = remainder
+            if (emily.bhActualQ && q >= 3) {
+              emily.bhActualQ[q - 1] = round2(bhCustomer[q - 1]);
+              emily.othersActualQ[q - 1] = round2(emilyQs[q - 1] - bhCustomer[q - 1]);
+            }
+          });
           Object.values(matched).forEach(({ rep, qs }) => {
             const m = allM.find(x => x.id === RAW_IMPORT_MAP[rep.toLowerCase()]);
             if (m) quartersInFile.forEach(q => { m.quarterlyActual[q - 1] = round2(qs[q - 1]); });
