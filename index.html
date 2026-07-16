@@ -1666,12 +1666,17 @@ const app = createApp({
     }
 
     // ===== Raw revenue data import (customer × month net-sales xlsx) =====
-    // salesrep (lowercased) → member id. Reps in RAW_IMPORT_BD are skipped (BD has its own sheet);
-    // anything else unmatched counts toward Emily's company total only.
+    // salesrep (lowercased) → member id + which quarters may be attributed to them:
+    // - Robert carries B&H for Q1/Q2 only (he left after Q2; from Q3 the B&H revenue
+    //   belongs to Emily and lands in her B&H branch input)
+    // - Nancy's Q1 book belonged to a departed salesperson (no bonus paid) — never
+    //   re-attribute it; it still counts toward the company total via Emily
+    // Reps in RAW_IMPORT_BD are skipped (BD has its own report); anything else
+    // unmatched counts toward Emily's company total only.
     const RAW_IMPORT_MAP = {
-      'nancy murray': 'nancy',
-      'justin wieczorek': 'justin',
-      'robert magness': 'robert',
+      'nancy murray': { id: 'nancy', quarters: [2, 3, 4] },
+      'justin wieczorek': { id: 'justin', quarters: [1, 2, 3, 4] },
+      'robert magness': { id: 'robert', quarters: [1, 2] },
     };
     const RAW_IMPORT_BD = ['jonathan miller', 'daniel colmenares', 'dash', 'na biz dev'];
 
@@ -1694,11 +1699,33 @@ const app = createApp({
           const custCol = header.indexOf('customer_name');
           const repCol = header.indexOf('salesrep');
           const monthCols = [];
+          // Format A: column header carries the month code, e.g. "net_sales_usd-2601"
           header.forEach((h, ci) => {
             const m = /^net_sales_usd-(\d{2})(\d{2})$/.exec(String(h == null ? '' : h).trim());
             if (m) monthCols.push({ col: ci, quarter: Math.ceil(parseInt(m[2], 10) / 3) });
           });
-          if (!monthCols.length) { alert(isZh ? '未找到月度收入列（如 net_sales_usd-2601）' : 'No monthly revenue columns found (e.g. net_sales_usd-2601)'); return; }
+          // Format B: header row has plain "net_sales_usd" and the row ABOVE holds the
+          // month date (Date object, Excel serial, or "2026-01-01" string). The "Total"
+          // column has no date above it, so it is naturally excluded.
+          if (!monthCols.length && headerIdx > 0) {
+            const dateRow = rows[headerIdx - 1] || [];
+            const parseMonth = v => {
+              if (v == null) return null;
+              if (v instanceof Date) return { y: v.getFullYear(), m: v.getMonth() + 1 };
+              if (typeof v === 'number' && v > 20000 && XLSX.SSF) {
+                const d = XLSX.SSF.parse_date_code(v);
+                return d ? { y: d.y, m: d.m } : null;
+              }
+              const s = /^(\d{4})-(\d{2})-\d{2}/.exec(String(v).trim());
+              return s ? { y: +s[1], m: +s[2] } : null;
+            };
+            header.forEach((h, ci) => {
+              if (String(h == null ? '' : h).trim() !== 'net_sales_usd') return;
+              const d = parseMonth(dateRow[ci]);
+              if (d && d.y === 2026) monthCols.push({ col: ci, quarter: Math.ceil(d.m / 3) });
+            });
+          }
+          if (!monthCols.length) { alert(isZh ? '未找到月度收入列（支持 net_sales_usd-2601 编码列，或表头上方带日期的 net_sales_usd 列）' : 'No monthly revenue columns found (supports net_sales_usd-2601 style headers, or net_sales_usd columns with a date row above)'); return; }
           const quartersInFile = [...new Set(monthCols.map(c => c.quarter))].sort();
 
           const byRep = {}; const grand = [0, 0, 0, 0]; const bhCustomer = [0, 0, 0, 0];
@@ -1718,32 +1745,45 @@ const app = createApp({
           }
 
           const allM = teams.flatMap(t => t.members);
-          const matched = {}; const bdSkipped = []; const unmatched = [];
+          const matched = []; const bdSkipped = []; const unmatched = [];
           for (const [rep, qs] of Object.entries(byRep)) {
-            const id = RAW_IMPORT_MAP[rep.toLowerCase()];
-            if (id) matched[id] = { rep, qs };
+            const cfg = RAW_IMPORT_MAP[rep.toLowerCase()];
+            if (cfg) matched.push({ rep, qs, m: allM.find(x => x.id === cfg.id), quarters: cfg.quarters });
             else if (RAW_IMPORT_BD.includes(rep.toLowerCase())) bdSkipped.push([rep, qs]);
             else unmatched.push([rep, qs]);
           }
 
           const round2 = v => Math.round(v * 100) / 100;
           const qList = quartersInFile.map(q => 'Q' + q).join(isZh ? '、' : ', ');
-          const fmtQs = qs => quartersInFile.map(q => 'Q' + q + ' ' + fmtCurrency(qs[q - 1])).join(' | ');
+          const fmtQs = (qs, quarters) => quartersInFile
+            .filter(q => !quarters || quarters.includes(q))
+            .map(q => 'Q' + q + ' ' + fmtCurrency(qs[q - 1])).join(' | ') || (isZh ? '（无可归属季度）' : '(no attributable quarter)');
           const emily = allM.find(m => m.id === 'emily');
 
-          // The dashboard adds contributor (e.g. Robert) revenue back on top of Emily's entry,
-          // so Emily gets the grand total MINUS contributor rows to avoid double counting.
+          // Emily = company total minus what contributors carry themselves — the dashboard
+          // re-adds contributor revenue. Robert only carries B&H in Q1/Q2 (his allowed
+          // quarters); from Q3 the B&H revenue stays with Emily.
           const emilyQs = [...grand];
-          Object.values(matched).forEach(({ rep, qs }) => {
-            const m = allM.find(x => x.id === RAW_IMPORT_MAP[rep.toLowerCase()]);
-            if (m && m.role === 'contributor') quartersInFile.forEach(q => { emilyQs[q - 1] -= qs[q - 1]; });
+          matched.forEach(({ m, qs, quarters }) => {
+            if (m && m.role === 'contributor') quartersInFile.forEach(q => {
+              if (quarters.includes(q)) emilyQs[q - 1] -= qs[q - 1];
+            });
           });
 
           let msg = (isZh ? `从「${file.name}」解析出 ${qList} 数据，将写入：\n\n` : `Parsed ${qList} from "${file.name}". Will write:\n\n`);
-          msg += `Emily (${isZh ? '公司总收入=全表合计，已扣除贡献者部分，系统会自动加回' : 'company total = all rows minus contributors (re-added automatically)'}): ${fmtQs(emilyQs)}\n`;
-          Object.values(matched).forEach(({ rep, qs }) => {
-            const m = allM.find(x => x.id === RAW_IMPORT_MAP[rep.toLowerCase()]);
-            msg += `${m.name} (${rep}): ${fmtQs(qs)}\n`;
+          msg += `Emily (${isZh ? '公司总收入，已扣除 Robert Q1/Q2 的 B&H 部分，系统会自动加回' : 'company total minus Robert\'s Q1/Q2 B&H share (re-added automatically)'}): ${fmtQs(emilyQs)}\n`;
+          if (emily && emily.bhActualQ && quartersInFile.some(q => q >= 3)) {
+            const bhNote = quartersInFile.filter(q => q >= 3).map(q => `Q${q} B&H ${fmtCurrency(bhCustomer[q - 1])} + Others ${fmtCurrency(emilyQs[q - 1] - bhCustomer[q - 1])}`).join(' | ');
+            msg += (isZh ? `  ↳ Q3 起 B&H 归 Emily，自动填入分支：${bhNote}\n` : `  ↳ From Q3 B&H belongs to Emily; branches auto-filled: ${bhNote}\n`);
+          }
+          matched.forEach(({ rep, qs, m, quarters }) => {
+            msg += `${m.name} (${rep}): ${fmtQs(qs, quarters)}\n`;
+            const excluded = quartersInFile.filter(q => !quarters.includes(q));
+            if (excluded.length) {
+              msg += (isZh
+                ? `  ↳ Q${excluded.join('、Q')} 不归属给${m.name}（${m.id === 'nancy' ? '离职销售的业绩，仅计入公司总数' : 'Q3 起 B&H 归 Emily，仅计入公司总数'}）\n`
+                : `  ↳ Q${excluded.join(', Q')} not attributed to ${m.name} (${m.id === 'nancy' ? 'departed salesperson\'s book — company total only' : 'B&H belongs to Emily from Q3 — company total only'})\n`);
+            }
           });
           if (bdSkipped.length) {
             msg += '\n' + (isZh ? '跳过 BD（另有单独数据表）：\n' : 'Skipped BD (separate sheet):\n');
@@ -1764,9 +1804,10 @@ const app = createApp({
               emily.othersActualQ[q - 1] = round2(emilyQs[q - 1] - bhCustomer[q - 1]);
             }
           });
-          Object.values(matched).forEach(({ rep, qs }) => {
-            const m = allM.find(x => x.id === RAW_IMPORT_MAP[rep.toLowerCase()]);
-            if (m) quartersInFile.forEach(q => { m.quarterlyActual[q - 1] = round2(qs[q - 1]); });
+          matched.forEach(({ m, qs, quarters }) => {
+            if (m) quartersInFile.forEach(q => {
+              if (quarters.includes(q)) m.quarterlyActual[q - 1] = round2(qs[q - 1]);
+            });
           });
         } catch (err) {
           console.error(err);
