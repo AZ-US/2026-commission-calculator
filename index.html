@@ -676,6 +676,9 @@ tr:hover td { background: #f8f9fa; }
                   <td v-for="qi in 4" :key="qi"
                       :style="(m.quarterlyActual[qi-1] > 0) ? 'background:#e8f5e9;font-weight:600' : 'color:#aaa'">
                     {{ fmtCurrency(memberCommQ(m, qi-1)) }}
+                    <div v-if="m.quarterLabels && m.quarterLabels[qi-1]" style="font-size:10px;color:#e67700;font-weight:600;line-height:1.4;white-space:nowrap">
+                      📌 {{ t(m.quarterLabels[qi-1].zh, m.quarterLabels[qi-1].en) }}
+                    </div>
                   </td>
                   <td style="font-weight:700;color:var(--primary)">{{ fmtCurrency(memberCommYTD(m)) }}</td>
                   <td style="font-size:12px;white-space:nowrap">
@@ -1095,7 +1098,12 @@ tr:hover td { background: #f8f9fa; }
                   </thead>
                   <tbody>
                     <tr v-for="qi in 4" :key="'act'+qi">
-                      <td><strong>Q{{ qi }}</strong> <span style="font-size:11px;color:var(--text-secondary)">({{ fmtPct(quarterlyWeights[qi-1]) }})</span></td>
+                      <td>
+                        <strong>Q{{ qi }}</strong> <span style="font-size:11px;color:var(--text-secondary)">({{ fmtPct(quarterlyWeights[qi-1]) }})</span>
+                        <div v-if="m.quarterLabels && m.quarterLabels[qi-1]" style="font-size:10px;color:#e67700;font-weight:600;line-height:1.5;white-space:nowrap">
+                          📌 {{ t(m.quarterLabels[qi-1].zh, m.quarterLabels[qi-1].en) }}
+                        </div>
+                      </td>
                       <td>
                         {{ fmtCurrency(memberActualQ(m,qi-1).qTarget) }}
                         <div v-if="m.id === 'emily' && qi >= 3" style="font-size:10px;color:var(--text-secondary);line-height:1.5">
@@ -1268,7 +1276,10 @@ function defaultTeams() {
         // under Emily after Robert's departure); quarterlyActual holds their sum and stays
         // the single source for attainment/commission math
         { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, qTargetShare: [0.5, 0.5, 1, 1], bhActualQ: [0,0,0,0], othersActualQ: [0,0,0,0], ref2025Commission: 6000, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
-        { id: 'nancy', name: 'Nancy', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 120000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 20516, quarterlyActual: [0,0,0,0] },
+        // quarterLabels: per-quarter annotation shown next to the quarter in the tracker.
+        // Nancy started 5/1/2026, so Q2 is her first quarter (Q1 belonged to a departed
+        // salesperson — counted in the company total, no commission paid).
+        { id: 'nancy', name: 'Nancy', titleZh: '高级客户经理', titleEn: 'Sr. Account Mgr', role: 'individual', baseSalary: 120000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 20516, quarterlyActual: [0,0,0,0], quarterLabels: [null, { zh: '5/1/2026 入职', en: 'Joined 5/1/2026' }, null, null] },
         { id: 'justin', name: 'Justin', titleZh: '客户经理', titleEn: 'Account Mgr', role: 'individual', baseSalary: 75000, rate: 0.0015, revenueTarget: 15809032, ref2025Commission: 21129, quarterlyActual: [0,0,0,0] },
         // Robert (resigned): commission entered MANUALLY per quarter from the BH reconciliation
         // (ref 0.075% flat, no multiplier). Only Q1+Q2 apply. His revenue still counts toward
