@@ -1106,9 +1106,11 @@ tr:hover td { background: #f8f9fa; }
                       </td>
                       <td>
                         {{ fmtCurrency(memberActualQ(m,qi-1).qTarget) }}
-                        <div v-if="m.id === 'emily' && qi >= 3" style="font-size:10px;color:var(--text-secondary);line-height:1.5">
-                          B&H: {{ fmtCurrency(memberActualQ(m,qi-1).qTarget * 0.5) }}<br>
-                          Others: {{ fmtCurrency(memberActualQ(m,qi-1).qTarget * 0.5) }}
+                        <!-- Scope breakdown: makes explicit which part of the target is B&H.
+                             Q1/Q2 show B&H $0 because that account sat under Robert then. -->
+                        <div v-if="m.bhTargetShare" style="font-size:10px;color:var(--text-secondary);line-height:1.5">
+                          B&H: {{ fmtCurrency(memberActualQ(m,qi-1).qTarget * m.bhTargetShare[qi-1]) }}<span v-if="!m.bhTargetShare[qi-1]" style="color:#e67700">{{ t('（在 Robert 名下）', ' (under Robert)') }}</span><br>
+                          Others: {{ fmtCurrency(memberActualQ(m,qi-1).qTarget * (1 - m.bhTargetShare[qi-1])) }}
                         </div>
                       </td>
                       <td style="background:#f1f8f1">
@@ -1151,8 +1153,8 @@ tr:hover td { background: #f8f9fa; }
                         <span v-else style="color:var(--text-secondary)">—</span>
                         <!-- branch attainment vs each 50% share — informational, the overall % above is unchanged -->
                         <div v-if="m.bhActualQ && qi >= 3 && memberActualQ(m,qi-1).qTarget > 0" style="font-size:10px;color:var(--text-secondary);line-height:1.5">
-                          B&H: {{ fmtPct((m.bhActualQ[qi-1] || 0) / (memberActualQ(m,qi-1).qTarget * 0.5)) }}<br>
-                          Others: {{ fmtPct((m.othersActualQ[qi-1] || 0) / (memberActualQ(m,qi-1).qTarget * 0.5)) }}
+                          B&H: {{ m.bhTargetShare[qi-1] > 0 ? fmtPct((m.bhActualQ[qi-1] || 0) / (memberActualQ(m,qi-1).qTarget * m.bhTargetShare[qi-1])) : '—' }}<br>
+                          Others: {{ m.bhTargetShare[qi-1] < 1 ? fmtPct((m.othersActualQ[qi-1] || 0) / (memberActualQ(m,qi-1).qTarget * (1 - m.bhTargetShare[qi-1]))) : '—' }}
                         </div>
                       </td>
                       <td>×{{ memberActualQ(m,qi-1).multiplier.toFixed(2) }}</td>
@@ -1275,7 +1277,9 @@ function defaultTeams() {
         // bhActualQ/othersActualQ: Q3+Q4 actuals are entered as two branches (B&H is back
         // under Emily after Robert's departure); quarterlyActual holds their sum and stays
         // the single source for attainment/commission math
-        { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, qTargetShare: [0.5, 0.5, 1, 1], bhActualQ: [0,0,0,0], othersActualQ: [0,0,0,0], ref2025Commission: 6000, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
+        // bhTargetShare: how much of Emily's OWN quarterly target is the B&H account.
+        // Q1/Q2 = 0 (B&H sat under Robert then), Q3/Q4 = 50% (B&H returned to her).
+        { id: 'emily', name: 'Emily', titleZh: '客户总监', titleEn: 'Account Director', role: 'director', baseSalary: 165000, rate: 0.00065, revenueTarget: 63236128, qTargetShare: [0.5, 0.5, 1, 1], bhTargetShare: [0, 0, 0.5, 0.5], bhActualQ: [0,0,0,0], othersActualQ: [0,0,0,0], ref2025Commission: 6000, quarterlyActual: [0,0,0,0], quarterlyNotes: ['','','',''] },
         // quarterLabels: per-quarter annotation shown next to the quarter in the tracker.
         // Nancy started 5/1/2026, so Q2 is her first quarter (Q1 belonged to a departed
         // salesperson — counted in the company total, no commission paid).
