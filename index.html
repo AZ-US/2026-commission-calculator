@@ -2606,11 +2606,12 @@ th:first-child,td:first-child{text-align:left}
   <div class="meta">${isZh?'生成日期':'Generated'}: ${dateStr} · ${isZh?m.titleZh:m.titleEn}</div>
 </div>
 
+<!-- Annual revenue target / annual target commission are deliberately omitted here:
+     for members whose quarters carry a target split (Emily), the two figures use
+     different bases and reading them side by side invites a wrong conclusion. -->
 <div class="info-grid">
   <div><span>${isZh?'底薪':'Base Salary'}</span><strong>${fmtCurrency(m.baseSalary)}</strong></div>
   <div><span>${isZh?'提成比例':'Commission Rate'}</span><strong>${(m.rate*100).toFixed(4)}%</strong></div>
-  <div><span>${isZh?'年度收入目标':'Annual Revenue Target'}</span><strong>${fmtCurrency(ytd.totalTarget)}</strong></div>
-  <div><span>${isZh?'年度目标提成 (100%)':'Annual Target Commission (100%)'}</span><strong>${fmtCurrency(calcResult(m,1).annualCommission)}</strong></div>
 </div>
 
 <h3 style="margin:18px 0 6px">${isZh?'季度实际完成':'Quarterly Actual Performance'}</h3>
