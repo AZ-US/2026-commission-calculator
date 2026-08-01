@@ -1109,7 +1109,7 @@ tr:hover td { background: #f8f9fa; }
                         <!-- Scope breakdown: makes explicit which part of the target is B&H.
                              Q1/Q2 show B&H $0 because that account sat under Robert then. -->
                         <div v-if="m.bhTargetShare" style="font-size:10px;color:var(--text-secondary);line-height:1.5">
-                          B&H: {{ fmtCurrency(memberActualQ(m,qi-1).qTarget * m.bhTargetShare[qi-1]) }}<span v-if="!m.bhTargetShare[qi-1]" style="color:#e67700">{{ t('（在 Robert 名下）', ' (under Robert)') }}</span><br>
+                          B&H: <span v-if="!m.bhTargetShare[qi-1]" style="color:#e67700">{{ t('（在 Robert 名下）', '(under Robert)') }}</span><span v-else>{{ fmtCurrency(memberActualQ(m,qi-1).qTarget * m.bhTargetShare[qi-1]) }}</span><br>
                           Others: {{ fmtCurrency(memberActualQ(m,qi-1).qTarget * (1 - m.bhTargetShare[qi-1])) }}
                         </div>
                       </td>
@@ -2564,7 +2564,7 @@ ${contribRows ? `
         // Scope breakdown under the target, mirroring the on-screen tracker
         const bhShare = m.bhTargetShare ? (m.bhTargetShare[qi] ?? 0) : null;
         const scopeSplit = bhShare === null ? '' : `<div style="font-size:10px;color:#5f6368;font-weight:400;line-height:1.5">
-            B&amp;H: ${fmtCurrency(r.qTarget * bhShare)}${bhShare ? '' : `<span style="color:#e67700">${isZh?'（在 Robert 名下）':' (under Robert)'}</span>`}<br>
+            B&amp;H: ${bhShare ? fmtCurrency(r.qTarget * bhShare) : `<span style="color:#e67700">${isZh?'（在 Robert 名下）':'(under Robert)'}</span>`}<br>
             Others: ${fmtCurrency(r.qTarget * (1 - bhShare))}
           </div>`;
         return `<tr ${r.entered?'':'style="color:#9aa0a6"'}>
