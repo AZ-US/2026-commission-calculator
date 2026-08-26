@@ -2046,15 +2046,11 @@ const app = createApp({
             const p = ds._pctLabels[i];
             if (p == null) return;
             const txt = Math.round(p) + '%';
-            const h = (bar.base ?? bar.y) - bar.y;
-            if (h > 26) { ctx.fillStyle = '#fff'; ctx.fillText(txt, bar.x, bar.y + 15); }
-            else {
-              // above a short bar: dark green on white, with a halo so it stays
-              // readable where it crosses grid lines or a neighbouring bar
-              ctx.lineWidth = 3; ctx.strokeStyle = '#fff';
-              ctx.strokeText(txt, bar.x, bar.y - 5);
-              ctx.fillStyle = '#0b6b3a'; ctx.fillText(txt, bar.x, bar.y - 5);
-            }
+            // Always dark green above the bar — white-on-green read poorly. The white
+            // halo keeps it legible where it crosses a grid line or neighbouring bar.
+            ctx.lineWidth = 3.5; ctx.strokeStyle = '#fff';
+            ctx.strokeText(txt, bar.x, bar.y - 6);
+            ctx.fillStyle = '#0b6b3a'; ctx.fillText(txt, bar.x, bar.y - 6);
           });
         });
         ctx.restore();
@@ -2201,7 +2197,7 @@ const app = createApp({
                 const p = c.dataset._pctLabels?.[c.dataIndex];
                 return p == null ? '' : (lang.value === 'zh' ? `占 100% 目标提成: ${p.toFixed(1)}%` : `${p.toFixed(1)}% of 100% target`);
               }}}
-            }, scales: { y: { beginAtZero: true, grace: '8%', ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
+            }, scales: { y: { beginAtZero: true, grace: '12%', ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
           });
         }
 
