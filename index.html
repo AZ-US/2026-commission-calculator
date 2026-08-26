@@ -901,7 +901,7 @@ tr:hover td { background: #f8f9fa; }
             🔄 {{ t('刷新图表', 'Refresh Charts') }}
           </button>
         </div>
-        <p style="font-size:11px;color:var(--text-secondary);margin-bottom:10px">
+        <p style="font-size:12.5px;color:#3c4043;line-height:1.7;margin-bottom:10px">
           {{ t('图表仅在切换页面或点击刷新时更新，避免录入数据时晃动。上方数据卡片和表格仍然实时同步。', 'Charts only update on tab switch or manual refresh, to avoid flicker while typing. Cards and tables above remain live.') }}
         </p>
         <div class="chart-grid">
@@ -1247,7 +1247,7 @@ tr:hover td { background: #f8f9fa; }
                   🔄 {{ t('刷新图表', 'Refresh Chart') }}
                 </button>
               </div>
-              <p style="font-size:11px;color:var(--text-secondary);margin-bottom:10px">
+              <p style="font-size:12.5px;color:#3c4043;line-height:1.7;margin-bottom:10px">
                 {{ t('柱状 = 各季度完成率（按乘数档位着色：红 ≤86% · 黄 86–104% · 绿 ≥105%）；折线 = 累计完成率趋势；虚线 = 100% 目标。未录入的季度不显示。图表在切换页面或点击刷新时更新。', 'Bars = attainment per quarter, colored by multiplier tier (red ≤86% · amber 86–104% · green ≥105%). Line = cumulative attainment trend. Dashed line marks 100%. Quarters with no data are skipped. Chart updates on tab switch or manual refresh.') }}
               </p>
               <div style="position:relative;height:300px">
@@ -1401,6 +1401,28 @@ function calcActualYTD(member, weights) {
   }
   const ytdAttainment = totalTarget > 0 ? totalActual / totalTarget : 0;
   return { totalActual, totalTarget, totalCommission, ytdAttainment };
+}
+
+// Chart.js ships a light-gray default text color (#666) that reads faint on white.
+// Darken every chart's text and grid, and bump the sizes/weights for legibility.
+if (window.Chart) {
+  const FONT = '-apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif';
+  Chart.defaults.color = '#202124';
+  Chart.defaults.font.family = FONT;
+  Chart.defaults.font.size = 13;
+  Chart.defaults.font.weight = 500;
+  Chart.defaults.borderColor = '#c8ccd0';
+  Chart.defaults.plugins.title.color = '#202124';
+  Chart.defaults.plugins.title.font = { family: FONT, size: 15, weight: 700 };
+  Chart.defaults.plugins.title.padding = { top: 4, bottom: 12 };
+  Chart.defaults.plugins.legend.labels.color = '#202124';
+  Chart.defaults.plugins.legend.labels.font = { family: FONT, size: 12, weight: 600 };
+  Chart.defaults.plugins.tooltip.titleFont = { family: FONT, size: 13, weight: 700 };
+  Chart.defaults.plugins.tooltip.bodyFont = { family: FONT, size: 12, weight: 500 };
+  Chart.defaults.scale.ticks.color = '#3c4043';
+  Chart.defaults.scale.ticks.font = { family: FONT, size: 12, weight: 600 };
+  Chart.defaults.scale.grid.color = '#e3e6e8';
+  Chart.defaults.scale.title.color = '#202124';
 }
 
 const app = createApp({
@@ -2017,7 +2039,7 @@ const app = createApp({
         const { ctx } = chart;
         ctx.save();
         ctx.textAlign = 'center';
-        ctx.font = '700 10px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+        ctx.font = '700 12px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
         chart.data.datasets.forEach((ds, di) => {
           if (!ds._pctLabels || !chart.isDatasetVisible(di)) return;
           chart.getDatasetMeta(di).data.forEach((bar, i) => {
@@ -2025,8 +2047,14 @@ const app = createApp({
             if (p == null) return;
             const txt = Math.round(p) + '%';
             const h = (bar.base ?? bar.y) - bar.y;
-            if (h > 22) { ctx.fillStyle = '#fff'; ctx.fillText(txt, bar.x, bar.y + 13); }
-            else { ctx.fillStyle = '#0d904f'; ctx.fillText(txt, bar.x, bar.y - 4); }
+            if (h > 26) { ctx.fillStyle = '#fff'; ctx.fillText(txt, bar.x, bar.y + 15); }
+            else {
+              // above a short bar: dark green on white, with a halo so it stays
+              // readable where it crosses grid lines or a neighbouring bar
+              ctx.lineWidth = 3; ctx.strokeStyle = '#fff';
+              ctx.strokeText(txt, bar.x, bar.y - 5);
+              ctx.fillStyle = '#0b6b3a'; ctx.fillText(txt, bar.x, bar.y - 5);
+            }
           });
         });
         ctx.restore();
@@ -2042,7 +2070,9 @@ const app = createApp({
         const { ctx } = chart;
         ctx.save();
         ctx.textAlign = 'center';
-        ctx.font = '600 11px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+        ctx.font = '700 13px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#fff';                                // halo for labels on white
         const barMeta = chart.getDatasetMeta(0);
         chart.data.datasets.forEach((ds, di) => {
           if (di === 2 || !chart.isDatasetVisible(di)) return;   // skip the 100% reference line
@@ -2052,15 +2082,19 @@ const app = createApp({
             const txt = v.toFixed(1) + '%';
             if (di === 0) {
               const h = (pt.base ?? pt.y) - pt.y;                // bar height in px
-              if (h > 26) { ctx.fillStyle = '#fff'; ctx.fillText(txt, pt.x, pt.y + 15); }
-              else { ctx.fillStyle = '#5f6368'; ctx.fillText(txt, pt.x, pt.y - 5); }
+              if (h > 30) { ctx.fillStyle = '#fff'; ctx.fillText(txt, pt.x, pt.y + 17); }
+              else {
+                ctx.strokeText(txt, pt.x, pt.y - 6);
+                ctx.fillStyle = '#202124'; ctx.fillText(txt, pt.x, pt.y - 6);
+              }
             } else {
-              // The bar label sits at barTop+15; drop this one below the point instead of
+              // The bar label sits at barTop+17; drop this one below the point instead of
               // above whenever the two would land on top of each other.
               const barTop = barMeta.data[i]?.y;
               const gap = barTop == null ? Infinity : pt.y - barTop;
-              ctx.fillStyle = '#1a73e8';
-              ctx.fillText(txt, pt.x, gap > 10 && gap < 38 ? pt.y + 17 : pt.y - 9);
+              const y = gap > 8 && gap < 42 ? pt.y + 20 : pt.y - 11;
+              ctx.strokeText(txt, pt.x, y);
+              ctx.fillStyle = '#1557b0'; ctx.fillText(txt, pt.x, y);
             }
           });
         });
