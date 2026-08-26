@@ -1238,6 +1238,22 @@ tr:hover td { background: #f8f9fa; }
                    : t('季度提成 = 年度提成 × 季度权重 | 结算周期：季末后30天内发放', 'Quarterly Commission = Annual Commission × Quarterly Weight | Settlement: within 30 days after quarter-end') }}
               </p>
             </div>
+
+            <!-- Quarterly attainment + trend -->
+            <div class="card" style="margin-top:20px">
+              <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+                <span>📈 {{ t('季度完成率与趋势', 'Quarterly Attainment & Trend') }}</span>
+                <button @click="renderCharts" style="font-size:12px;padding:6px 12px;background:#e8f0fe;color:#1a73e8;border:1px solid #1a73e8;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap">
+                  🔄 {{ t('刷新图表', 'Refresh Chart') }}
+                </button>
+              </div>
+              <p style="font-size:11px;color:var(--text-secondary);margin-bottom:10px">
+                {{ t('柱状 = 各季度完成率（按乘数档位着色：红 ≤86% · 黄 86–104% · 绿 ≥105%）；折线 = 累计完成率趋势；虚线 = 100% 目标。未录入的季度不显示。图表在切换页面或点击刷新时更新。', 'Bars = attainment per quarter, colored by multiplier tier (red ≤86% · amber 86–104% · green ≥105%). Line = cumulative attainment trend. Dashed line marks 100%. Quarters with no data are skipped. Chart updates on tab switch or manual refresh.') }}
+              </p>
+              <div style="position:relative;height:300px">
+                <canvas :id="'chartMemberQ-' + m.id"></canvas>
+              </div>
+            </div>
           </div>
         </template>
       </template>
@@ -1993,8 +2009,58 @@ const app = createApp({
 
     // === Charts ===
     let charts = {};
+    // Per-member chart: quarterly attainment bars (tier-colored) + cumulative trend line.
+    // Quarters with nothing entered stay null so the line breaks instead of dropping to 0.
+    function renderMemberChart() {
+      const m = teams.flatMap(t => t.members).find(x => x.id === activeTab.value);
+      if (!m) return;
+      setTimeout(() => {
+        const el = document.getElementById('chartMemberQ-' + m.id);
+        if (!el) return;
+        Object.values(charts).forEach(c => c.destroy());
+        charts = {};
+        const isZh = lang.value === 'zh';
+        const pct = [], cum = [], barColors = [];
+        let runActual = 0, runTarget = 0;
+        for (let qi = 0; qi < 4; qi++) {
+          const r = memberActualQ(m, qi);
+          if (r.entered && r.qTarget > 0) {
+            const a = r.attainment * 100;
+            pct.push(a);
+            barColors.push(a >= 105 ? '#0d904f' : a > 86 ? '#f9ab00' : '#ea4335');
+            runActual += r.actual; runTarget += r.qTarget;
+            cum.push(runTarget > 0 ? (runActual / runTarget) * 100 : null);
+          } else {
+            pct.push(null); barColors.push('#dadce0'); cum.push(null);
+          }
+        }
+        charts.memberQ = new Chart(el, {
+          data: {
+            labels: ['Q1','Q2','Q3','Q4'],
+            datasets: [
+              { type: 'bar', label: isZh ? '季度完成率' : 'Quarterly attainment', data: pct,
+                backgroundColor: barColors, borderColor: barColors, borderWidth: 1, order: 2 },
+              { type: 'line', label: isZh ? '累计完成率' : 'Cumulative attainment', data: cum,
+                borderColor: '#1a73e8', backgroundColor: '#1a73e8', borderWidth: 2,
+                tension: 0.3, pointRadius: 4, spanGaps: true, order: 1 },
+              { type: 'line', label: isZh ? '100% 目标' : '100% target', data: [100,100,100,100],
+                borderColor: '#9aa0a6', borderWidth: 1, borderDash: [5,4], pointRadius: 0, order: 0 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              title: { display: true, text: `${m.name} — ${isZh ? '季度完成率与趋势' : 'Quarterly Attainment & Trend'}` },
+              tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y == null ? (isZh ? '未录入' : 'not entered') : c.parsed.y.toFixed(2) + '%'}` } }
+            },
+            scales: { y: { beginAtZero: true, ticks: { callback: v => v + '%' } } }
+          }
+        });
+      }, 60);
+    }
+
     function renderCharts() {
-      if (activeTab.value !== 'dashboard') return;
+      if (activeTab.value !== 'dashboard') { renderMemberChart(); return; }
       setTimeout(() => {
         const allMembers = teams.flatMap(t => t.members);
         const names = allMembers.map(m => m.name);
