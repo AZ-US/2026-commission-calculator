@@ -2009,6 +2009,30 @@ const app = createApp({
 
     // === Charts ===
     let charts = {};
+    // Draws a % label on any dataset that carries a _pctLabels array (used by the
+    // dashboard scenario chart to annotate the green YTD Actual bars).
+    const barPctPlugin = {
+      id: 'barPct',
+      afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.font = '700 10px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+        chart.data.datasets.forEach((ds, di) => {
+          if (!ds._pctLabels || !chart.isDatasetVisible(di)) return;
+          chart.getDatasetMeta(di).data.forEach((bar, i) => {
+            const p = ds._pctLabels[i];
+            if (p == null) return;
+            const txt = Math.round(p) + '%';
+            const h = (bar.base ?? bar.y) - bar.y;
+            if (h > 22) { ctx.fillStyle = '#fff'; ctx.fillText(txt, bar.x, bar.y + 13); }
+            else { ctx.fillStyle = '#0d904f'; ctx.fillText(txt, bar.x, bar.y - 4); }
+          });
+        });
+        ctx.restore();
+      }
+    };
+
     // Draws the % value on each bar and trend point. Inline rather than pulling in
     // chartjs-plugin-datalabels — bar labels sit inside tall bars (white) or just above
     // short ones, line labels sit above the point, so the two never collide.
@@ -2122,6 +2146,11 @@ const app = createApp({
             datasets.push({
               label: lang.value === 'zh' ? 'YTD 实际' : 'YTD Actual',
               data: allMembers.map(m => memberCommYTD(m)),
+              // % of the 100% target commission earned so far — same basis as 提成发放
+              _pctLabels: allMembers.map(m => {
+                const tgt = calcResult(m, 1).annualCommission;
+                return tgt > 0 ? (memberCommYTD(m) / tgt) * 100 : null;
+              }),
               backgroundColor: '#0d904f',
               borderColor: '#0d904f',
               borderWidth: 2,
@@ -2130,8 +2159,15 @@ const app = createApp({
           }
           charts.scenario = new Chart(ctx1, {
             type: 'bar',
+            plugins: [barPctPlugin],
             data: { labels: names, datasets },
-            options: { responsive: true, plugins: { title: { display: true, text: lang.value === 'zh' ? '场景对比 + YTD 实际' : 'Scenarios + YTD Actual' }}, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
+            options: { responsive: true, plugins: {
+              title: { display: true, text: lang.value === 'zh' ? '场景对比 + YTD 实际（绿柱标注 = 占 100% 目标提成的比例）' : 'Scenarios + YTD Actual (label on green bar = % of 100% target commission)' },
+              tooltip: { callbacks: { afterLabel: c => {
+                const p = c.dataset._pctLabels?.[c.dataIndex];
+                return p == null ? '' : (lang.value === 'zh' ? `占 100% 目标提成: ${p.toFixed(1)}%` : `${p.toFixed(1)}% of 100% target`);
+              }}}
+            }, scales: { y: { beginAtZero: true, grace: '8%', ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
           });
         }
 
