@@ -2009,6 +2009,41 @@ const app = createApp({
 
     // === Charts ===
     let charts = {};
+    // Draws the % value on each bar and trend point. Inline rather than pulling in
+    // chartjs-plugin-datalabels — bar labels sit inside tall bars (white) or just above
+    // short ones, line labels sit above the point, so the two never collide.
+    const pctLabelPlugin = {
+      id: 'pctLabels',
+      afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.font = '600 11px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+        const barMeta = chart.getDatasetMeta(0);
+        chart.data.datasets.forEach((ds, di) => {
+          if (di === 2 || !chart.isDatasetVisible(di)) return;   // skip the 100% reference line
+          chart.getDatasetMeta(di).data.forEach((pt, i) => {
+            const v = ds.data[i];
+            if (v == null) return;
+            const txt = v.toFixed(1) + '%';
+            if (di === 0) {
+              const h = (pt.base ?? pt.y) - pt.y;                // bar height in px
+              if (h > 26) { ctx.fillStyle = '#fff'; ctx.fillText(txt, pt.x, pt.y + 15); }
+              else { ctx.fillStyle = '#5f6368'; ctx.fillText(txt, pt.x, pt.y - 5); }
+            } else {
+              // The bar label sits at barTop+15; drop this one below the point instead of
+              // above whenever the two would land on top of each other.
+              const barTop = barMeta.data[i]?.y;
+              const gap = barTop == null ? Infinity : pt.y - barTop;
+              ctx.fillStyle = '#1a73e8';
+              ctx.fillText(txt, pt.x, gap > 10 && gap < 38 ? pt.y + 17 : pt.y - 9);
+            }
+          });
+        });
+        ctx.restore();
+      }
+    };
+
     // Per-member chart: quarterly attainment bars (tier-colored) + cumulative trend line.
     // Quarters with nothing entered stay null so the line breaks instead of dropping to 0.
     function renderMemberChart() {
@@ -2035,6 +2070,7 @@ const app = createApp({
           }
         }
         charts.memberQ = new Chart(el, {
+          plugins: [pctLabelPlugin],
           data: {
             labels: ['Q1','Q2','Q3','Q4'],
             datasets: [
@@ -2053,7 +2089,8 @@ const app = createApp({
               title: { display: true, text: `${m.name} — ${isZh ? '季度完成率与趋势' : 'Quarterly Attainment & Trend'}` },
               tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y == null ? (isZh ? '未录入' : 'not entered') : c.parsed.y.toFixed(2) + '%'}` } }
             },
-            scales: { y: { beginAtZero: true, ticks: { callback: v => v + '%' } } }
+            // grace leaves headroom so the topmost data label is not clipped
+            scales: { y: { beginAtZero: true, grace: '12%', ticks: { callback: v => v + '%' } } }
           }
         });
       }, 60);
