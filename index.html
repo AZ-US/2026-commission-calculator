@@ -897,6 +897,20 @@ tr:hover td { background: #f8f9fa; }
             </tbody>
           </table>
         </div>
+
+        <!-- B&H monthly trend -->
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:20px">
+          <strong style="font-size:13.5px">📊 {{ t('B&H 月度走势', 'B&H Monthly Trend') }}</strong>
+          <button @click="renderCharts" style="font-size:12px;padding:6px 12px;background:#e8f0fe;color:#1a73e8;border:1px solid #1a73e8;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap">
+            🔄 {{ t('刷新图表', 'Refresh Chart') }}
+          </button>
+        </div>
+        <p style="font-size:12.5px;color:#3c4043;line-height:1.7;margin:6px 0 4px">
+          {{ t('柱状 = 每月净销售额，按归属着色（1–6月 Robert，7–12月 Emily）；折线 = 累计（右轴）。录入或导入后点「刷新图表」更新。', 'Bars = monthly net sales, colored by owner (Jan–Jun Robert, Jul–Dec Emily). Line = cumulative (right axis). Hit Refresh Chart after typing or importing.') }}
+        </p>
+        <div style="position:relative;height:310px">
+          <canvas id="chartBhMonthly"></canvas>
+        </div>
       </div>
 
       <!-- YTD Real-Time Tracking -->
@@ -2178,6 +2192,31 @@ const app = createApp({
       }
     };
 
+    // Labels bars carrying _moneyLabel with their own value, abbreviated to $x.xM / $xxxK.
+    const moneyLabelPlugin = {
+      id: 'moneyLabels',
+      afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.font = '700 11px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+        ctx.lineWidth = 3.5;
+        ctx.strokeStyle = '#fff';
+        chart.data.datasets.forEach((ds, di) => {
+          if (!ds._moneyLabel || !chart.isDatasetVisible(di)) return;
+          chart.getDatasetMeta(di).data.forEach((bar, i) => {
+            const v = ds.data[i];
+            if (!v) return;
+            const txt = v >= 1e6 ? '$' + (v / 1e6).toFixed(1) + 'M' : '$' + Math.round(v / 1000) + 'K';
+            ctx.strokeText(txt, bar.x, bar.y - 6);
+            ctx.fillStyle = ds._labelColor || '#202124';
+            ctx.fillText(txt, bar.x, bar.y - 6);
+          });
+        });
+        ctx.restore();
+      }
+    };
+
     // Draws the % value on each bar and trend point. Inline rather than pulling in
     // chartjs-plugin-datalabels — bar labels sit inside tall bars (white) or just above
     // short ones, line labels sit above the point, so the two never collide.
@@ -2371,6 +2410,56 @@ const app = createApp({
               ]
             },
             options: { responsive: true, plugins: { title: { display: true, text: lang.value === 'zh' ? '季度提成：目标 vs 实际' : 'Quarterly Commission: Target vs Actual' }}, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' }}}}
+          });
+        }
+
+        // 4b. B&H monthly revenue — bars split by owner (Robert Q1/Q2, Emily from Q3)
+        //     plus a cumulative line on the right axis
+        const ctxBh = document.getElementById('chartBhMonthly');
+        if (ctxBh) {
+          const isZh = lang.value === 'zh';
+          const mLabels = [...Array(12)].map((_, i) => isZh ? (i + 1) + '月'
+            : new Date(2026, i, 1).toLocaleDateString('en-US', { month: 'short' }));
+          // cumulative stops at the last month that has data, so the line does not
+          // run flat across months nobody has reported yet
+          const lastIdx = bhMonthly.reduce((last, v, i) => (v ? i : last), -1);
+          let run = 0;
+          const cumulative = bhMonthly.map((v, i) => { run += (v || 0); return i <= lastIdx ? run : null; });
+          const money = v => v >= 1e6 ? '$' + (v / 1e6).toFixed(2) + 'M' : '$' + Math.round(v / 1000) + 'K';
+          charts.bhMonthly = new Chart(ctxBh, {
+            plugins: [moneyLabelPlugin],
+            data: {
+              labels: mLabels,
+              datasets: [
+                { type: 'bar', label: isZh ? '1–6月（Robert）' : 'Jan–Jun (Robert)', stack: 'bh',
+                  data: bhMonthly.map((v, i) => i < 6 ? (v || null) : null),
+                  backgroundColor: '#1a73e8', borderColor: '#1a73e8', borderWidth: 1,
+                  _moneyLabel: true, _labelColor: '#0f4c9c', order: 2 },
+                { type: 'bar', label: isZh ? '7–12月（Emily）' : 'Jul–Dec (Emily)', stack: 'bh',
+                  data: bhMonthly.map((v, i) => i >= 6 ? (v || null) : null),
+                  backgroundColor: '#0d904f', borderColor: '#0d904f', borderWidth: 1,
+                  _moneyLabel: true, _labelColor: '#0b6b3a', order: 2 },
+                { type: 'line', label: isZh ? '累计' : 'Cumulative', data: cumulative, yAxisID: 'y1',
+                  borderColor: '#e8710a', backgroundColor: '#e8710a', borderWidth: 2,
+                  tension: 0.3, pointRadius: 3, spanGaps: true, order: 1 }
+              ]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: {
+                title: { display: true, text: isZh ? 'B&H 月度净销售额与累计' : 'B&H Monthly Net Sales & Cumulative' },
+                tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y == null ? '—' : money(c.parsed.y)}` } }
+              },
+              scales: {
+                y: { stacked: true, beginAtZero: true, grace: '14%',
+                     title: { display: true, text: isZh ? '月度' : 'Monthly' },
+                     ticks: { callback: v => '$' + (v / 1e6).toFixed(1) + 'M' } },
+                y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false },
+                      title: { display: true, text: isZh ? '累计' : 'Cumulative' },
+                      ticks: { callback: v => '$' + (v / 1e6).toFixed(0) + 'M' } },
+                x: { stacked: true }
+              }
+            }
           });
         }
 
