@@ -848,8 +848,10 @@ tr:hover td { background: #f8f9fa; }
               <tr>
                 <th>{{ t('月份', 'Month') }}</th>
                 <th style="background:#e8f5e9">{{ t('净销售额', 'Net Sales') }}</th>
+                <th>{{ t('环比', 'MoM') }}</th>
                 <th>{{ t('占 YTD 比重', '% of YTD') }}</th>
                 <th>{{ t('累计', 'Cumulative') }}</th>
+                <th>{{ t('归属', 'Booked under') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -869,15 +871,20 @@ tr:hover td { background: #f8f9fa; }
                              placeholder="0">
                     </div>
                   </td>
+                  <td>
+                    <span v-if="bhMoM((qi-1)*3 + k - 1) === null" style="color:#5f6368">—</span>
+                    <span v-else :style="bhMoM((qi-1)*3 + k - 1) >= 0 ? 'color:#0d904f;font-weight:600' : 'color:#c5221f;font-weight:600'">
+                      {{ bhMoM((qi-1)*3 + k - 1) >= 0 ? '+' : '−' }}{{ Math.abs(bhMoM((qi-1)*3 + k - 1) * 100).toFixed(0) }}%
+                    </span>
+                  </td>
                   <td>{{ bhYtdTotal > 0 && bhMonthly[(qi-1)*3 + k - 1] ? fmtPct(bhMonthly[(qi-1)*3 + k - 1] / bhYtdTotal) : '—' }}</td>
                   <td>{{ fmtCurrency(bhMonthly.slice(0, (qi-1)*3 + k).reduce((s, v) => s + (v || 0), 0)) }}</td>
+                  <td style="font-size:11.5px">{{ bhMonthOwner((qi-1)*3 + k - 1) }}</td>
                 </tr>
                 <tr style="font-weight:700;background:#f8f9fa">
-                  <td>Q{{ qi }} {{ t('小计', 'Subtotal') }}
-                    <span style="font-size:11px;font-weight:400;color:#5f6368"> · {{ t('归属', 'booked under') }} {{ bhQuarterBooked(qi-1).who }}</span>
-                  </td>
+                  <td>Q{{ qi }} {{ t('小计', 'Subtotal') }}</td>
                   <td style="background:#eef7ef">{{ fmtCurrency(bhQuarterTotal(qi-1)) }}</td>
-                  <td colspan="2" style="font-weight:400;font-size:11.5px">
+                  <td colspan="3" style="font-weight:400;font-size:11.5px">
                     <span v-if="bhQuarterTotal(qi-1) === 0 && bhQuarterBooked(qi-1).amount === 0" style="color:#5f6368">—</span>
                     <span v-else-if="Math.abs(bhQuarterTotal(qi-1) - bhQuarterBooked(qi-1).amount) < 1" style="color:#0d904f">
                       ✓ {{ t('与' + bhQuarterBooked(qi-1).who + '页面一致', 'ties to ' + bhQuarterBooked(qi-1).who + "'s tab") }}
@@ -887,12 +894,13 @@ tr:hover td { background: #f8f9fa; }
                       {{ fmtCurrency(bhQuarterTotal(qi-1) - bhQuarterBooked(qi-1).amount) }}
                     </span>
                   </td>
+                  <td style="font-weight:400;font-size:11.5px">{{ bhQuarterBooked(qi-1).who }}</td>
                 </tr>
               </template>
               <tr style="font-weight:700;border-top:2px solid #0d904f;background:#f1f8f1">
                 <td>{{ t('YTD 合计', 'YTD Total') }}</td>
                 <td style="color:#0d904f">{{ fmtCurrency(bhYtdTotal) }}</td>
-                <td colspan="2"></td>
+                <td colspan="4"></td>
               </tr>
             </tbody>
           </table>
@@ -1543,6 +1551,14 @@ const app = createApp({
       return [0,1,2].reduce((s, k) => s + (bhMonthly[qi * 3 + k] || 0), 0);
     }
     const bhYtdTotal = computed(() => bhMonthly.reduce((s, v) => s + (v || 0), 0));
+    // month-over-month change; null when either month is missing so the cell shows a dash
+    // rather than a meaningless +/-100%
+    function bhMoM(i) {
+      if (i <= 0) return null;
+      const cur = bhMonthly[i] || 0, prev = bhMonthly[i - 1] || 0;
+      return cur && prev ? (cur - prev) / prev : null;
+    }
+    function bhMonthOwner(i) { return bhQuarterBooked(Math.floor(i / 3)).who; }
     // Who the quarter's B&H revenue is booked under, and what that member's own entry says —
     // lets the card flag a monthly record that no longer ties to the member pages.
     function bhQuarterBooked(qi) {
@@ -3123,7 +3139,7 @@ th:first-child,td:first-child{text-align:left}
       memberCommQ, memberCommYTD,
       cloudStatus, isEditorMode, reloadFromCloud,
       contributorMembers, contributorQActual, contributorYTD, contributorsTotalYTD,
-      bhMonthly, bhQuarterTotal, bhYtdTotal, bhQuarterBooked,
+      bhMonthly, bhQuarterTotal, bhYtdTotal, bhQuarterBooked, bhMoM, bhMonthOwner,
       accountQActualEmily, accountQActualContributors,
       renderCharts,
     };
