@@ -760,20 +760,20 @@ tr:hover td { background: #f8f9fa; }
               <template v-for="team in teams">
                 <tr v-for="m in team.members" :key="m.id">
                   <td><strong>{{ m.name }}</strong>
-                    <span v-if="m.manualCommission" style="display:block;font-size:10px;color:var(--text-secondary)">{{ t('B&H 实际提成 (Q1+Q2)', 'B&H actual (Q1+Q2)') }}</span>
+                    <span v-if="m.manualCommission" style="display:block;font-size:10px;color:var(--text-secondary)">{{ t('B&H 固定比例 · 无乘数', 'B&H flat rate, no multiplier') }}</span>
                   </td>
                   <td>{{ fmtCurrency(m.baseSalary) }}</td>
-                  <td>{{ fmtCurrency(tccAnnualComm(m)) }}</td>
-                  <td><strong>{{ fmtCurrency(m.baseSalary + tccAnnualComm(m)) }}</strong></td>
-                  <td>{{ fmtPct(tccAnnualComm(m) / (m.baseSalary + tccAnnualComm(m))) }}</td>
+                  <td>{{ fmtCurrency(calcResult(m, 1).annualCommission) }}</td>
+                  <td><strong>{{ fmtCurrency(calcResult(m, 1).tcc) }}</strong></td>
+                  <td>{{ fmtPct(calcResult(m, 1).annualCommission / calcResult(m, 1).tcc) }}</td>
                 </tr>
               </template>
               <tr style="font-weight:700; border-top:2px solid var(--border)">
                 <td>{{ t('全部合计', 'Grand Total') }}</td>
                 <td>{{ fmtCurrency(grandBaseTotal) }}</td>
-                <td>{{ fmtCurrency(tccGrandComm) }}</td>
-                <td>{{ fmtCurrency(grandBaseTotal + tccGrandComm) }}</td>
-                <td>{{ fmtPct(tccGrandComm / (grandBaseTotal + tccGrandComm)) }}</td>
+                <td>{{ fmtCurrency(grandCommTotal(1)) }}</td>
+                <td>{{ fmtCurrency(grandBaseTotal + grandCommTotal(1)) }}</td>
+                <td>{{ fmtPct(grandCommTotal(1) / (grandBaseTotal + grandCommTotal(1))) }}</td>
               </tr>
             </tbody>
           </table>
@@ -1653,12 +1653,6 @@ const app = createApp({
     // ratio flatters itself. This also keeps the figure equal to the HQ Match card's total.
     const targetCommAccount = computed(() => teams[0].members.reduce((s, m) => s + calcResult(m, 1).annualCommission, 0));
 
-    // TCC summary: manual-commission members (Robert) show their actual entered
-    // Q1+Q2 total as annual commission, not a simulated plan figure
-    function tccAnnualComm(m) {
-      return m.manualCommission ? m.manualCommission.reduce((a, b) => a + (b || 0), 0) : calcResult(m, 1).annualCommission;
-    }
-    const tccGrandComm = computed(() => teams.flatMap(t => t.members).reduce((s, m) => s + tccAnnualComm(m), 0));
     const targetCommBd      = computed(() => teams[1].members.reduce((s, m) => s + calcResult(m, 1).annualCommission, 0));
     const targetCommTotal   = computed(() => targetCommAccount.value + targetCommBd.value);
     const payoutRatioAccount = computed(() => targetCommAccount.value > 0 ? ytdAccountTeamComm.value / targetCommAccount.value : 0);
@@ -3113,7 +3107,7 @@ th:first-child,td:first-child{text-align:left}
       authenticated, passwordInput, loginError, doLogin,
       lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
       t, fmtCurrency, fmtPct, fmtInt, fmtIntNoZero, parseNumInput, calcResult, customResult,
-      teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal, tccAnnualComm, tccGrandComm,
+      teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
       weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary, exportAllTeamComm, exportYtdImage,
       exportMemberExcel, exportAllExcel,
       saveToFile, loadFromFile, importRawData, importBdData, resetDefaults,
