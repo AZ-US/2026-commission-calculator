@@ -1816,7 +1816,11 @@ const app = createApp({
     const RAW_IMPORT_MAP = {
       'nancy murray': { id: 'nancy', quarters: [2, 3, 4] },
       'justin wieczorek': { id: 'justin', quarters: [1, 2, 3, 4] },
-      'robert magness': { id: 'robert', quarters: [1, 2] },
+      // book:'bh' — Robert's tab IS the B&H book, so take the B&H customer rows rather
+      // than everything the export happens to list under his name (e.g. a William F
+      // White row). That keeps his page and the B&H monthly record exactly in step;
+      // any non-B&H revenue under his name stays in the company total via Emily.
+      'robert magness': { id: 'robert', quarters: [1, 2], book: 'bh' },
     };
     const RAW_IMPORT_BD = ['jonathan miller', 'daniel colmenares', 'dash', 'na biz dev'];
 
@@ -1889,7 +1893,8 @@ const app = createApp({
           const matched = []; const bdSkipped = []; const unmatched = [];
           for (const [rep, qs] of Object.entries(byRep)) {
             const cfg = RAW_IMPORT_MAP[rep.toLowerCase()];
-            if (cfg) matched.push({ rep, qs, m: allM.find(x => x.id === cfg.id), quarters: cfg.quarters });
+            if (cfg) matched.push({ rep, qs: cfg.book === 'bh' ? bhCustomer : qs, repQs: qs, book: cfg.book,
+                                    m: allM.find(x => x.id === cfg.id), quarters: cfg.quarters });
             else if (RAW_IMPORT_BD.includes(rep.toLowerCase())) bdSkipped.push([rep, qs]);
             else unmatched.push([rep, qs]);
           }
@@ -1917,8 +1922,17 @@ const app = createApp({
             const bhNote = quartersInFile.filter(q => q >= 3).map(q => `Q${q} B&H ${fmtCurrency(bhCustomer[q - 1])} + Others ${fmtCurrency(emilyQs[q - 1] - bhCustomer[q - 1])}`).join(' | ');
             msg += (isZh ? `  ↳ Q3 起 B&H 归 Emily，自动填入分支：${bhNote}\n` : `  ↳ From Q3 B&H belongs to Emily; branches auto-filled: ${bhNote}\n`);
           }
-          matched.forEach(({ rep, qs, m, quarters }) => {
+          matched.forEach(({ rep, qs, repQs, book, m, quarters }) => {
             msg += `${m.name} (${rep}): ${fmtQs(qs, quarters)}\n`;
+            if (book === 'bh') {
+              const off = quartersInFile.filter(q => quarters.includes(q) && Math.abs(repQs[q - 1] - qs[q - 1]) >= 0.01);
+              if (off.length) {
+                const detail = off.map(q => `Q${q} ${fmtCurrency(repQs[q - 1] - qs[q - 1])}`).join(' | ');
+                msg += (isZh
+                  ? `  ↳ 仅取 B&H 客户；${rep} 名下的非 B&H 收入不计入他名下（${detail}），保留在公司总数里\n`
+                  : `  ↳ B&H customers only; non-B&H revenue listed under ${rep} is not attributed to him (${detail}) and stays in the company total\n`);
+              }
+            }
             const excluded = quartersInFile.filter(q => !quarters.includes(q));
             if (excluded.length) {
               msg += (isZh
