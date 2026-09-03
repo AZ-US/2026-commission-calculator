@@ -927,6 +927,146 @@ tr:hover td { background: #f8f9fa; }
         </div>
       </div>
 
+      <!-- Non-B&H customers, month over month -->
+      <div class="card" id="othersCard" v-if="hasOthersData">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <span>🧾 {{ t('其他客户环比分析（非 B&H）', 'Other Customers — Month over Month (excl. B&H)') }}</span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;font-weight:400;color:#3c4043;white-space:nowrap">
+              {{ t('分析月份', 'Month') }}
+              <select v-model.number="others.month" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:5px">
+                <option :value="0">{{ t('自动', 'Auto') }}</option>
+                <option v-for="mm in 12" :key="'om'+mm" :value="mm">{{ t(mm + ' 月', '2026-' + String(mm).padStart(2,'0')) }}</option>
+              </select>
+            </label>
+            <button @click="exportOthersImage" data-html2canvas-ignore style="font-size:12px;padding:6px 12px;background:#e67700;color:#fff;border:1px solid #e67700;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap">
+              🖼️ {{ t('下载图片', 'Download Image') }}
+            </button>
+          </span>
+        </div>
+        <p style="font-size:12.5px;color:#3c4043;line-height:1.7;margin-bottom:12px">
+          {{ t('B&H 以外的全部客户，按月看环比。B&H 波动极大（单月相差数倍），把它拆出来后剩下的业务节奏才看得清。客户明细取金额最大的 40 家（覆盖全部有意义的变动），导入原始数据时自动生成。', 'Every customer except B&H, month over month. B&H swings by multiples from month to month, so separating it out is what makes the rest of the book readable. Customer detail covers the 40 largest accounts — enough for every meaningful mover — and is generated on raw-data import.') }}
+        </p>
+
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('月份', 'Month') }}</th>
+                <th style="background:#fff3e0">{{ t('非 B&H 当月', 'Non-B&H') }}</th>
+                <th>{{ t('非 B&H 环比', 'Non-B&H MoM') }}</th>
+                <th>{{ t('占比', 'Share') }}</th>
+                <th>{{ t('累计', 'Cumulative') }}</th>
+                <th>{{ t('（对比）B&H 当月', '(vs) B&H') }}</th>
+                <th>{{ t('B&H 环比', 'B&H MoM') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="mm in 12" :key="'or'+mm" :style="mm > othersLastMonth ? 'color:#9aa0a6' : ''">
+                <td>
+                  <strong>{{ t(mm + ' 月', '2026-' + String(mm).padStart(2,'0')) }}</strong>
+                  <span v-if="mm === othersLastMonth" style="font-size:10px;color:#e67700"> · {{ t('分析月', 'selected') }}</span>
+                </td>
+                <td style="background:#fffaf3">{{ others.monthly[mm-1] ? fmtCurrency(others.monthly[mm-1]) : '—' }}</td>
+                <td>
+                  <span v-if="othersMoM(mm-1) === null" style="color:#5f6368">—</span>
+                  <span v-else :style="othersMoM(mm-1) >= 0 ? 'color:#0d904f;font-weight:600' : 'color:#c5221f;font-weight:600'">
+                    {{ othersMoM(mm-1) >= 0 ? '+' : '−' }}{{ Math.abs(othersMoM(mm-1) * 100).toFixed(0) }}%
+                  </span>
+                </td>
+                <td>{{ othersYtd > 0 && others.monthly[mm-1] ? fmtPct(others.monthly[mm-1] / othersYtd) : '—' }}</td>
+                <td>{{ fmtCurrency(others.monthly.slice(0, mm).reduce((s, v) => s + (v || 0), 0)) }}</td>
+                <td>{{ bhMonthly[mm-1] ? fmtCurrency(bhMonthly[mm-1]) : '—' }}</td>
+                <td>
+                  <span v-if="bhMoM(mm-1) === null" style="color:#5f6368">—</span>
+                  <span v-else :style="bhMoM(mm-1) >= 0 ? 'color:#0d904f' : 'color:#c5221f'">
+                    {{ bhMoM(mm-1) >= 0 ? '+' : '−' }}{{ Math.abs(bhMoM(mm-1) * 100).toFixed(0) }}%
+                  </span>
+                </td>
+              </tr>
+              <tr style="font-weight:700;border-top:2px solid #e67700;background:#f8f9fa">
+                <td>1–{{ othersLastMonth }} {{ t('月合计', 'total') }}</td>
+                <td style="background:#fff3e0">{{ fmtCurrency(othersYtd) }}</td>
+                <td colspan="3" style="font-weight:400;font-size:11.5px;color:#3c4043">
+                  {{ t('月均', 'monthly avg') }} {{ fmtCurrency(othersLastMonth ? othersYtd / othersLastMonth : 0) }}
+                </td>
+                <td>{{ fmtCurrency(bhMonthly.slice(0, othersLastMonth).reduce((s, v) => s + (v || 0), 0)) }}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- movers for the selected month -->
+        <div v-if="othersMovers.month >= 2" style="margin-top:20px">
+          <strong style="font-size:13.5px">
+            🔍 {{ t(othersMovers.month + ' 月环比拆解', 'Month ' + othersMovers.month + ' breakdown') }}
+          </strong>
+          <span style="font-size:12.5px;color:#3c4043">
+            —— {{ fmtCurrency(othersMovers.prev) }} → {{ fmtCurrency(othersMovers.cur) }}
+            <strong :style="othersMovers.delta >= 0 ? 'color:#0d904f' : 'color:#c5221f'">
+              ({{ othersMovers.delta === null ? '—' : (othersMovers.delta >= 0 ? '+' : '−') + Math.abs(othersMovers.delta * 100).toFixed(0) + '%' }},
+              {{ fmtCurrency(othersMovers.cur - othersMovers.prev) }})
+            </strong>
+          </span>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:10px">
+            <div style="padding:12px;background:#f1f8f1;border-left:4px solid #0d904f;border-radius:6px">
+              <div style="font-size:12px;font-weight:700;color:#0d904f;margin-bottom:6px">▲ {{ t('拉动', 'Lifted') }}</div>
+              <div v-for="r in othersMovers.up" :key="'up'+r.name" style="font-size:12px;display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dashed #d7e8d8">
+                <span :title="r.rep">{{ r.name.length > 26 ? r.name.slice(0,26) + '…' : r.name }}</span>
+                <span style="white-space:nowrap;color:#0d904f;font-weight:600">+{{ fmtCurrency(r.gap) }}</span>
+              </div>
+              <div v-if="!othersMovers.up.length" style="font-size:12px;color:#5f6368">—</div>
+            </div>
+            <div style="padding:12px;background:#fdf1f0;border-left:4px solid #c5221f;border-radius:6px">
+              <div style="font-size:12px;font-weight:700;color:#c5221f;margin-bottom:6px">▼ {{ t('拖累', 'Dragged') }}</div>
+              <div v-for="r in othersMovers.down" :key="'dn'+r.name" style="font-size:12px;display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dashed #f0d6d4">
+                <span :title="r.rep">{{ r.name.length > 26 ? r.name.slice(0,26) + '…' : r.name }}</span>
+                <span style="white-space:nowrap;color:#c5221f;font-weight:600">{{ fmtCurrency(r.gap) }}</span>
+              </div>
+              <div v-if="!othersMovers.down.length" style="font-size:12px;color:#5f6368">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- top customers matrix -->
+        <div style="margin-top:20px">
+          <strong style="font-size:13.5px">🏆 {{ t('TOP 10 客户逐月（千美元）', 'Top 10 customers by month ($K)') }}</strong>
+        </div>
+        <div style="overflow-x:auto;margin-top:8px">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('客户', 'Customer') }}</th>
+                <th v-for="mm in othersLastMonth" :key="'th'+mm">{{ mm }}{{ t('月', '') }}</th>
+                <th style="background:#fff3e0">1–{{ othersLastMonth }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="c in othersTop" :key="'tc'+c.name">
+                <td><strong>{{ c.name.length > 28 ? c.name.slice(0,28) + '…' : c.name }}</strong>
+                  <span style="display:block;font-size:10px;color:#5f6368">{{ c.rep }}</span>
+                </td>
+                <td v-for="mm in othersLastMonth" :key="'tv'+c.name+mm" style="font-size:12px">
+                  {{ c.m[mm-1] ? Math.round(c.m[mm-1] / 1000).toLocaleString() : '—' }}
+                </td>
+                <td style="background:#fffaf3;font-weight:700">{{ Math.round(c.total / 1000).toLocaleString() }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:20px">
+          <strong style="font-size:13.5px">📊 {{ t('非 B&H 月度走势', 'Non-B&H monthly trend') }}</strong>
+          <button @click="renderCharts" data-html2canvas-ignore style="font-size:12px;padding:6px 12px;background:#e8f0fe;color:#1a73e8;border:1px solid #1a73e8;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap">
+            🔄 {{ t('刷新图表', 'Refresh Chart') }}
+          </button>
+        </div>
+        <div style="position:relative;height:310px;margin-top:8px">
+          <canvas id="chartOthers"></canvas>
+        </div>
+      </div>
+
       <!-- Year-over-year -->
       <div class="card" id="yoyCard" v-if="hasYoyData">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
@@ -1729,6 +1869,56 @@ const app = createApp({
       };
     });
     const hasYoyData = computed(() => yoy.company2025.some(v => v > 0));
+
+    // ===== Non-B&H customers, month over month =====
+    // monthly = non-B&H company total per month; customers = the largest accounts with
+    // their own monthly series, kept so the movers breakdown can be recomputed for any
+    // month rather than baked in at import time.
+    const others = reactive({ month: 0, monthly: new Array(12).fill(0), customers: [] });
+    const OTHERS_KEEP = 40;
+    function othersMoM(i) {
+      if (i <= 0) return null;
+      const cur = others.monthly[i] || 0, prev = others.monthly[i - 1] || 0;
+      return cur && prev ? (cur - prev) / prev : null;
+    }
+    const othersLastMonth = computed(() => {
+      if (others.month >= 1 && others.month <= 12) return others.month;
+      const vals = others.monthly.filter(v => v > 0);
+      if (!vals.length) return 0;
+      const sorted = [...vals].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)];
+      let last = others.monthly.reduce((l, v, i) => (v ? i + 1 : l), 0);
+      while (last > 1 && others.monthly[last - 1] < median * 0.3) last--;
+      return last;
+    });
+    const othersYtd = computed(() => {
+      const n = othersLastMonth.value;
+      return others.monthly.reduce((s, v, i) => s + (i < n ? (v || 0) : 0), 0);
+    });
+    // customers ranked by how much they moved between the selected month and the one before
+    const othersMovers = computed(() => {
+      const m = othersLastMonth.value;
+      if (m < 2) return { up: [], down: [], month: m, prev: 0, cur: 0, delta: null };
+      const rows = others.customers.map(c => ({
+        name: c.name, rep: c.rep,
+        prev: c.m[m - 2] || 0, cur: c.m[m - 1] || 0,
+        gap: (c.m[m - 1] || 0) - (c.m[m - 2] || 0),
+      })).filter(r => Math.abs(r.gap) > 0.5).sort((a, b) => b.gap - a.gap);
+      const prevTot = others.monthly[m - 2] || 0, curTot = others.monthly[m - 1] || 0;
+      return {
+        month: m, prev: prevTot, cur: curTot,
+        delta: prevTot ? (curTot - prevTot) / prevTot : null,
+        up: rows.filter(r => r.gap > 0).slice(0, 5),
+        down: rows.filter(r => r.gap < 0).slice(-5).reverse(),
+      };
+    });
+    const othersTop = computed(() => {
+      const n = othersLastMonth.value;
+      return [...others.customers]
+        .map(c => ({ ...c, total: c.m.reduce((s, v, i) => s + (i < n ? (v || 0) : 0), 0) }))
+        .sort((a, b) => b.total - a.total).slice(0, 10);
+    });
+    const hasOthersData = computed(() => others.monthly.some(v => v > 0));
     // Who the quarter's B&H revenue is booked under, and what that member's own entry says —
     // lets the card flag a monthly record that no longer ties to the member pages.
     function bhQuarterBooked(qi) {
@@ -1880,7 +2070,7 @@ const app = createApp({
     }
 
     function getState() {
-      return { lang: lang.value, activeTab: activeTab.value, customAttainment: customAttainment.value, teams: JSON.parse(JSON.stringify(teams)), scenarios: JSON.parse(JSON.stringify(scenarios)), quarterlyWeights: [...quarterlyWeights], bhMonthly: [...bhMonthly], yoy: JSON.parse(JSON.stringify(yoy)) };
+      return { lang: lang.value, activeTab: activeTab.value, customAttainment: customAttainment.value, teams: JSON.parse(JSON.stringify(teams)), scenarios: JSON.parse(JSON.stringify(scenarios)), quarterlyWeights: [...quarterlyWeights], bhMonthly: [...bhMonthly], yoy: JSON.parse(JSON.stringify(yoy)), others: JSON.parse(JSON.stringify(others)) };
     }
 
     function loadState(state) {
@@ -1895,6 +2085,14 @@ const app = createApp({
         MONTH_KEYS.forEach(k => {
           if (Array.isArray(state.yoy[k])) state.yoy[k].forEach((v, i) => { if (i < 12) yoy[k][i] = v || 0; });
         });
+      }
+      if (state.others) {
+        if (typeof state.others.month === 'number') others.month = state.others.month;
+        if (Array.isArray(state.others.monthly)) state.others.monthly.forEach((v, i) => { if (i < 12) others.monthly[i] = v || 0; });
+        if (Array.isArray(state.others.customers)) others.customers = state.others.customers.map(c => ({
+          name: String(c.name || ''), rep: String(c.rep || ''),
+          m: Array.from({ length: 12 }, (_, i) => (c.m && c.m[i]) || 0),
+        }));
       }
       if (state.scenarios) state.scenarios.forEach((s, i) => { if (scenarios[i]) Object.assign(scenarios[i], s); });
       if (state.teams) {
@@ -1975,7 +2173,7 @@ const app = createApp({
       }, 800);
     }
 
-    watch([teams, scenarios, quarterlyWeights, lang, customAttainment, bhMonthly, yoy], autoSave, { deep: true });
+    watch([teams, scenarios, quarterlyWeights, lang, customAttainment, bhMonthly, yoy, others], autoSave, { deep: true });
 
     function saveToFile() {
       const blob = new Blob([JSON.stringify(getState(), null, 2)], { type: 'application/json' });
@@ -2087,6 +2285,9 @@ const app = createApp({
           const reassigned = [];
           // year-over-year capture: company + B&H by month, per year
           const co26 = new Array(12).fill(0), co25 = new Array(12).fill(0), bh25 = new Array(12).fill(0);
+          // non-B&H customers by month (2026), for the month-over-month module
+          const othMonthly = new Array(12).fill(0);
+          const othCust = new Map();
           for (let i = headerIdx + 1; i < rows.length; i++) {
             const r = rows[i];
             if (!r || !r[custCol] || !r[repCol]) continue;
@@ -2104,6 +2305,13 @@ const app = createApp({
               byRep[rep][mc.quarter - 1] += v;
               grand[mc.quarter - 1] += v;
               if (isBh) { bhCustomer[mc.quarter - 1] += v; bhByMonth[mc.month - 1] += v; }
+              else {
+                othMonthly[mc.month - 1] += v;
+                const key = String(r[custCol]).trim();
+                let rec = othCust.get(key);
+                if (!rec) { rec = { name: key, rep: listedRep, m: new Array(12).fill(0) }; othCust.set(key, rec); }
+                rec.m[mc.month - 1] += v;
+              }
               co26[mc.month - 1] += v;
             }
             for (const pc of prevCols) {
@@ -2203,6 +2411,25 @@ const app = createApp({
             yoy.company2025[pc.month - 1] = round2(co25[pc.month - 1]);
             yoy.bh2025[pc.month - 1] = round2(bh25[pc.month - 1]);
           });
+          // Non-B&H month-over-month: aggregate plus the largest accounts. Keeping only the
+          // top slice bounds the synced document; it still covers every meaningful mover.
+          monthCols.forEach(mc => { others.monthly[mc.month - 1] = round2(othMonthly[mc.month - 1]); });
+          // Rank by size, but also keep the biggest month-to-month swings — a customer can
+          // move $80k in a month while sitting well outside the top accounts by total.
+          const scored = [...othCust.values()].map(c => {
+            const m = c.m.map(round2);
+            let swing = 0;
+            for (let k = 1; k < 12; k++) swing = Math.max(swing, Math.abs(m[k] - m[k - 1]));
+            return { name: c.name, rep: c.rep, m, total: Math.abs(m.reduce((s, v) => s + v, 0)), swing };
+          });
+          const bySize = [...scored].sort((a, b) => b.total - a.total).slice(0, OTHERS_KEEP);
+          const bySwing = [...scored].sort((a, b) => b.swing - a.swing).slice(0, 20);
+          const seen = new Set();
+          others.customers = [...bySize, ...bySwing]
+            .filter(c => !seen.has(c.name) && seen.add(c.name))
+            .map(({ name, rep, m }) => ({ name, rep, m }));
+          // modules that appear only once their data exists need their charts built
+          setTimeout(renderCharts, 120);
         } catch (err) {
           console.error(err);
           alert(isZh ? '解析失败：' + err.message : 'Import failed: ' + err.message);
@@ -2284,6 +2511,9 @@ const app = createApp({
       bhMonthly.forEach((_, i) => bhMonthly[i] = 0);
       yoy.through = 0;
       MONTH_KEYS.forEach(k => yoy[k].forEach((_, i) => yoy[k][i] = 0));
+      others.month = 0;
+      others.monthly.forEach((_, i) => others.monthly[i] = 0);
+      others.customers = [];
       customAttainment.value = 100;
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -2672,6 +2902,49 @@ const app = createApp({
           });
         }
 
+        // 4d. Non-B&H monthly with the MoM % on a right axis, B&H drawn behind for contrast
+        const ctxOth = document.getElementById('chartOthers');
+        if (ctxOth) {
+          const isZh = lang.value === 'zh';
+          const mLabels = [...Array(12)].map((_, i) => isZh ? (i + 1) + '月'
+            : new Date(2026, i, 1).toLocaleDateString('en-US', { month: 'short' }));
+          const money = v => v >= 1e6 ? '$' + (v / 1e6).toFixed(2) + 'M' : '$' + Math.round(v / 1000) + 'K';
+          const momSeries = others.monthly.map((v, i) => {
+            const p = i > 0 ? (others.monthly[i - 1] || 0) : 0;
+            return v && p ? (v - p) / p * 100 : null;
+          });
+          charts.others = new Chart(ctxOth, {
+            data: {
+              labels: mLabels,
+              datasets: [
+                { type: 'bar', label: isZh ? '非 B&H' : 'Non-B&H', data: others.monthly.map(v => v || null),
+                  backgroundColor: '#e67700', borderColor: '#e67700', borderWidth: 1, order: 3 },
+                { type: 'bar', label: 'B&H', data: bhMonthly.map(v => v || null),
+                  backgroundColor: '#dfe3e6', borderColor: '#c3c9ce', borderWidth: 1, order: 4 },
+                { type: 'line', label: isZh ? '非 B&H 环比 %' : 'Non-B&H MoM %', data: momSeries, yAxisID: 'y1',
+                  borderColor: '#1a73e8', backgroundColor: '#1a73e8', borderWidth: 2,
+                  tension: 0.3, pointRadius: 3, spanGaps: true, order: 1 }
+              ]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: {
+                title: { display: true, text: isZh ? '非 B&H 月度收入与环比（灰柱为 B&H 对照）' : 'Non-B&H monthly revenue & MoM (grey = B&H for contrast)' },
+                tooltip: { callbacks: { label: c => c.dataset.yAxisID === 'y1'
+                  ? `${c.dataset.label}: ${c.parsed.y == null ? '—' : c.parsed.y.toFixed(1) + '%'}`
+                  : `${c.dataset.label}: ${c.parsed.y == null ? '—' : money(c.parsed.y)}` } }
+              },
+              scales: {
+                y: { beginAtZero: true, grace: '10%', title: { display: true, text: isZh ? '收入' : 'Revenue' },
+                     ticks: { callback: v => '$' + (v / 1e6).toFixed(1) + 'M' } },
+                y1: { position: 'right', grid: { drawOnChartArea: false },
+                      title: { display: true, text: isZh ? '环比 %' : 'MoM %' },
+                      ticks: { callback: v => v + '%' } }
+              }
+            }
+          });
+        }
+
         // 4c. Year-over-year: 2025 vs 2026 by month, with the YoY % on a right axis
         const ctxYoy = document.getElementById('chartYoy');
         if (ctxYoy) {
@@ -2837,6 +3110,7 @@ const app = createApp({
     function exportYtdImage() { return exportCardImage('ytdTrackingCard', 'YTD_Tracking'); }
     function exportBhImage()  { return exportCardImage('bhMonthlyCard', 'BH_Monthly'); }
     function exportYoyImage() { return exportCardImage('yoyCard', 'YoY_2026_vs_2025'); }
+    function exportOthersImage() { return exportCardImage('othersCard', 'Other_Customers_MoM'); }
 
     // Export ONLY the All-Team Commission Summary card as a printable PDF report
     function exportAllTeamComm() {
@@ -3381,7 +3655,7 @@ th:first-child,td:first-child{text-align:left}
       lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
       t, fmtCurrency, fmtPct, fmtInt, fmtIntNoZero, parseNumInput, calcResult, customResult,
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
-      weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary, exportAllTeamComm, exportYtdImage, exportBhImage, exportYoyImage,
+      weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary, exportAllTeamComm, exportYtdImage, exportBhImage, exportYoyImage, exportOthersImage,
       exportMemberExcel, exportAllExcel,
       saveToFile, loadFromFile, importRawData, importBdData, resetDefaults,
       memberActualQ, memberActualYTD,
@@ -3398,6 +3672,7 @@ th:first-child,td:first-child{text-align:left}
       contributorMembers, contributorQActual, contributorYTD, contributorsTotalYTD,
       bhMonthly, bhQuarterTotal, bhYtdTotal, bhQuarterBooked, bhMoM, bhMonthOwner,
       yoy, yoyDelta, yoyCompare, hasYoyData,
+      others, othersMoM, othersLastMonth, othersYtd, othersMovers, othersTop, hasOthersData,
       accountQActualEmily, accountQActualContributors,
       renderCharts,
     };
