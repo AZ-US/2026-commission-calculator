@@ -1824,6 +1824,14 @@ const app = createApp({
     };
     const RAW_IMPORT_BD = ['jonathan miller', 'daniel colmenares', 'dash', 'na biz dev'];
 
+    // Customers whose owner is fixed by account, not by whatever rep the export lists.
+    // William F White / Sunbelt is Daniel's, so a stray row filed under someone else
+    // is folded back to him. Purely an attribution move: the company total is unchanged,
+    // and these rows are never treated as B&H.
+    const REP_REASSIGN = [
+      { re: /William\s*F\.?\s*White/i, rep: 'Daniel Colmenares' },
+    ];
+
     function importRawData(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -1874,10 +1882,16 @@ const app = createApp({
 
           const byRep = {}; const grand = [0, 0, 0, 0]; const bhCustomer = [0, 0, 0, 0];
           const bhByMonth = new Array(12).fill(0);
+          const reassigned = [];
           for (let i = headerIdx + 1; i < rows.length; i++) {
             const r = rows[i];
             if (!r || !r[custCol] || !r[repCol]) continue;
-            const rep = String(r[repCol]).trim();
+            const listedRep = String(r[repCol]).trim();
+            const ra = REP_REASSIGN.find(x => x.re.test(String(r[custCol])));
+            const rep = ra ? ra.rep : listedRep;
+            if (ra && ra.rep.toLowerCase() !== listedRep.toLowerCase()) {
+              reassigned.push({ cust: String(r[custCol]).trim(), from: listedRep, to: ra.rep });
+            }
             const isBh = /^\s*BH PHOTO/i.test(String(r[custCol]));
             if (!byRep[rep]) byRep[rep] = [0, 0, 0, 0];
             for (const mc of monthCols) {
@@ -1940,6 +1954,10 @@ const app = createApp({
                 : `  ↳ Q${excluded.join(', Q')} not attributed to ${m.name} (${m.id === 'nancy' ? 'departed salesperson\'s book — company total only' : 'B&H belongs to Emily from Q3 — company total only'})\n`);
             }
           });
+          if (reassigned.length) {
+            msg += '\n' + (isZh ? '按客户归属调整（不影响公司总数）：\n' : 'Re-attributed by account (company total unchanged):\n');
+            reassigned.forEach(x => { msg += `  ${x.cust} : ${x.from} → ${x.to}\n`; });
+          }
           if (bdSkipped.length) {
             msg += '\n' + (isZh ? '跳过 BD（另有单独数据表）：\n' : 'Skipped BD (separate sheet):\n');
             bdSkipped.forEach(([rep, qs]) => { msg += `  ${rep}: ${fmtQs(qs)}\n`; });
