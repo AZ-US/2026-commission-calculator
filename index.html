@@ -836,6 +836,73 @@ tr:hover td { background: #f8f9fa; }
         </div>
       </div>
 
+      <!-- B&H monthly revenue record -->
+      <div class="card">
+        <div class="card-title">🏢 {{ t('B&H 月度完成记录', 'B&H Monthly Revenue Record') }}</div>
+        <p style="font-size:12.5px;color:#3c4043;line-height:1.7;margin-bottom:12px">
+          {{ t('单独记录 B&H 客户每月净销售额。导入原始数据时自动按「BH PHOTO VIDEO」客户行填充，也可手动录入或校准。归属：Q1、Q2 在 Robert 名下，Q3 起回到 Emily（计入她的 B&H 分支）。', 'A standalone record of the B&H account\'s monthly net sales. Auto-filled from the "BH PHOTO VIDEO" customer rows on raw-data import; can also be typed or adjusted by hand. Attribution: Q1 & Q2 sit under Robert, from Q3 the account returns to Emily (her B&H branch).') }}
+        </p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('月份', 'Month') }}</th>
+                <th style="background:#e8f5e9">{{ t('净销售额', 'Net Sales') }}</th>
+                <th>{{ t('占 YTD 比重', '% of YTD') }}</th>
+                <th>{{ t('累计', 'Cumulative') }}</th>
+                <th>{{ t('0.075% 参考提成', '0.075% Reference Commission') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="qi in 4" :key="'bhq'+qi">
+                <tr v-for="k in 3" :key="'bhm'+qi+k">
+                  <td>
+                    <strong>{{ t((qi-1)*3 + k + ' 月', '2026-' + String((qi-1)*3 + k).padStart(2,'0')) }}</strong>
+                    <span style="font-size:11px;color:#5f6368"> · Q{{ qi }}</span>
+                  </td>
+                  <td style="background:#f1f8f1">
+                    <div style="display:flex;align-items:center;gap:4px">
+                      <span>$</span>
+                      <input class="editable-input" type="text" inputmode="numeric" style="width:130px;background:#e8f5e9"
+                             :value="fmtIntNoZero(bhMonthly[(qi-1)*3 + k - 1])"
+                             @input="bhMonthly[(qi-1)*3 + k - 1] = parseNumInput($event.target.value)"
+                             @focus="$event.target.select()"
+                             placeholder="0">
+                    </div>
+                  </td>
+                  <td>{{ bhYtdTotal > 0 && bhMonthly[(qi-1)*3 + k - 1] ? fmtPct(bhMonthly[(qi-1)*3 + k - 1] / bhYtdTotal) : '—' }}</td>
+                  <td>{{ fmtCurrency(bhMonthly.slice(0, (qi-1)*3 + k).reduce((s, v) => s + (v || 0), 0)) }}</td>
+                  <td>{{ bhMonthly[(qi-1)*3 + k - 1] ? fmtCurrency(bhMonthly[(qi-1)*3 + k - 1] * 0.00075) : '—' }}</td>
+                </tr>
+                <tr style="font-weight:700;background:#f8f9fa">
+                  <td>Q{{ qi }} {{ t('小计', 'Subtotal') }}
+                    <span style="font-size:11px;font-weight:400;color:#5f6368"> · {{ t('归属', 'booked under') }} {{ bhQuarterBooked(qi-1).who }}</span>
+                  </td>
+                  <td style="background:#eef7ef">{{ fmtCurrency(bhQuarterTotal(qi-1)) }}</td>
+                  <td colspan="2" style="font-weight:400;font-size:11.5px">
+                    <span v-if="bhQuarterTotal(qi-1) === 0 && bhQuarterBooked(qi-1).amount === 0" style="color:#5f6368">—</span>
+                    <span v-else-if="Math.abs(bhQuarterTotal(qi-1) - bhQuarterBooked(qi-1).amount) < 1" style="color:#0d904f">
+                      ✓ {{ t('与' + bhQuarterBooked(qi-1).who + '页面一致', 'ties to ' + bhQuarterBooked(qi-1).who + "'s tab") }}
+                    </span>
+                    <span v-else style="color:#c5221f">
+                      ⚠️ {{ t('与' + bhQuarterBooked(qi-1).who + '页面差', 'differs from ' + bhQuarterBooked(qi-1).who + "'s tab by") }}
+                      {{ fmtCurrency(bhQuarterTotal(qi-1) - bhQuarterBooked(qi-1).amount) }}
+                    </span>
+                  </td>
+                  <td>{{ bhQuarterTotal(qi-1) ? fmtCurrency(bhQuarterTotal(qi-1) * 0.00075) : '—' }}</td>
+                </tr>
+              </template>
+              <tr style="font-weight:700;border-top:2px solid #0d904f;background:#f1f8f1">
+                <td>{{ t('YTD 合计', 'YTD Total') }}</td>
+                <td style="color:#0d904f">{{ fmtCurrency(bhYtdTotal) }}</td>
+                <td colspan="2"></td>
+                <td style="color:#0d904f">{{ fmtCurrency(bhYtdTotal * 0.00075) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- YTD Real-Time Tracking -->
       <div class="card" id="ytdTrackingCard" v-if="ytdActualRevenue > 0 || ytdBdActual > 0">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
@@ -1458,6 +1525,25 @@ const app = createApp({
     const lang = ref('zh');
     const activeTab = ref('dashboard');
     const customAttainment = ref(100);
+
+    // B&H monthly revenue record (Jan..Dec 2026). Company-level rather than per-member:
+    // the account sits under Robert for Q1/Q2 and under Emily from Q3.
+    const bhMonthly = reactive(new Array(12).fill(0));
+    function bhQuarterTotal(qi) {
+      return [0,1,2].reduce((s, k) => s + (bhMonthly[qi * 3 + k] || 0), 0);
+    }
+    const bhYtdTotal = computed(() => bhMonthly.reduce((s, v) => s + (v || 0), 0));
+    // Who the quarter's B&H revenue is booked under, and what that member's own entry says —
+    // lets the card flag a monthly record that no longer ties to the member pages.
+    function bhQuarterBooked(qi) {
+      const all = teams.flatMap(t => t.members);
+      if (qi <= 1) {
+        const r = all.find(m => m.id === 'robert');
+        return { who: r ? r.name : 'Robert', amount: r ? (r.quarterlyActual || [])[qi] || 0 : 0 };
+      }
+      const e = all.find(m => m.id === 'emily');
+      return { who: e ? e.name : 'Emily', amount: e && e.bhActualQ ? e.bhActualQ[qi] || 0 : 0 };
+    }
     const teams = reactive(defaultTeams());
     const scenarios = reactive(defaultScenarios());
     const quarterlyWeights = reactive(defaultWeights());
@@ -1603,7 +1689,7 @@ const app = createApp({
     }
 
     function getState() {
-      return { lang: lang.value, activeTab: activeTab.value, customAttainment: customAttainment.value, teams: JSON.parse(JSON.stringify(teams)), scenarios: JSON.parse(JSON.stringify(scenarios)), quarterlyWeights: [...quarterlyWeights] };
+      return { lang: lang.value, activeTab: activeTab.value, customAttainment: customAttainment.value, teams: JSON.parse(JSON.stringify(teams)), scenarios: JSON.parse(JSON.stringify(scenarios)), quarterlyWeights: [...quarterlyWeights], bhMonthly: [...bhMonthly] };
     }
 
     function loadState(state) {
@@ -1612,6 +1698,7 @@ const app = createApp({
       if (state.activeTab) activeTab.value = state.activeTab;
       if (state.customAttainment) customAttainment.value = state.customAttainment;
       if (state.quarterlyWeights) state.quarterlyWeights.forEach((v, i) => quarterlyWeights[i] = v);
+      if (Array.isArray(state.bhMonthly)) state.bhMonthly.forEach((v, i) => { if (i < 12) bhMonthly[i] = v || 0; });
       if (state.scenarios) state.scenarios.forEach((s, i) => { if (scenarios[i]) Object.assign(scenarios[i], s); });
       if (state.teams) {
         state.teams.forEach((st, ti) => {
@@ -1691,7 +1778,7 @@ const app = createApp({
       }, 800);
     }
 
-    watch([teams, scenarios, quarterlyWeights, lang, customAttainment], autoSave, { deep: true });
+    watch([teams, scenarios, quarterlyWeights, lang, customAttainment, bhMonthly], autoSave, { deep: true });
 
     function saveToFile() {
       const blob = new Blob([JSON.stringify(getState(), null, 2)], { type: 'application/json' });
@@ -1755,7 +1842,7 @@ const app = createApp({
           // Format A: column header carries the month code, e.g. "net_sales_usd-2601"
           header.forEach((h, ci) => {
             const m = /^net_sales_usd-(\d{2})(\d{2})$/.exec(String(h == null ? '' : h).trim());
-            if (m) monthCols.push({ col: ci, quarter: Math.ceil(parseInt(m[2], 10) / 3) });
+            if (m) monthCols.push({ col: ci, month: parseInt(m[2], 10), quarter: Math.ceil(parseInt(m[2], 10) / 3) });
           });
           // Format B: header row has plain "net_sales_usd" and the row ABOVE holds the
           // month date (Date object, Excel serial, or "2026-01-01" string). The "Total"
@@ -1775,13 +1862,14 @@ const app = createApp({
             header.forEach((h, ci) => {
               if (String(h == null ? '' : h).trim() !== 'net_sales_usd') return;
               const d = parseMonth(dateRow[ci]);
-              if (d && d.y === 2026) monthCols.push({ col: ci, quarter: Math.ceil(d.m / 3) });
+              if (d && d.y === 2026) monthCols.push({ col: ci, month: d.m, quarter: Math.ceil(d.m / 3) });
             });
           }
           if (!monthCols.length) { alert(isZh ? '未找到月度收入列（支持 net_sales_usd-2601 编码列，或表头上方带日期的 net_sales_usd 列）' : 'No monthly revenue columns found (supports net_sales_usd-2601 style headers, or net_sales_usd columns with a date row above)'); return; }
           const quartersInFile = [...new Set(monthCols.map(c => c.quarter))].sort();
 
           const byRep = {}; const grand = [0, 0, 0, 0]; const bhCustomer = [0, 0, 0, 0];
+          const bhByMonth = new Array(12).fill(0);
           for (let i = headerIdx + 1; i < rows.length; i++) {
             const r = rows[i];
             if (!r || !r[custCol] || !r[repCol]) continue;
@@ -1793,7 +1881,7 @@ const app = createApp({
               if (!isFinite(v)) continue;
               byRep[rep][mc.quarter - 1] += v;
               grand[mc.quarter - 1] += v;
-              if (isBh) bhCustomer[mc.quarter - 1] += v;
+              if (isBh) { bhCustomer[mc.quarter - 1] += v; bhByMonth[mc.month - 1] += v; }
             }
           }
 
@@ -1846,6 +1934,8 @@ const app = createApp({
             msg += '\n' + (isZh ? '无对应人头（仅计入公司总数）：\n' : 'No matching member (company total only):\n');
             unmatched.forEach(([rep, qs]) => { msg += `  ${rep}: ${fmtQs(qs)}\n`; });
           }
+          const bhMonthNote = monthCols.map(mc => `${mc.month}${isZh ? '月' : '/26'} ${fmtCurrency(bhByMonth[mc.month - 1])}`).join(' · ');
+          msg += '\n' + (isZh ? `B&H 月度记录将更新为：${bhMonthNote}\n` : `B&H monthly record will be set to: ${bhMonthNote}\n`);
           msg += '\n' + (isZh ? '确定写入？（只覆盖上述人员的这些季度，BD 三人不变）' : 'Proceed? (Only these members/quarters are overwritten; BD members unchanged)');
           if (!confirm(msg)) return;
 
@@ -1862,6 +1952,8 @@ const app = createApp({
               if (quarters.includes(q)) m.quarterlyActual[q - 1] = round2(qs[q - 1]);
             });
           });
+          // B&H monthly record — only the months this file actually covers
+          monthCols.forEach(mc => { bhMonthly[mc.month - 1] = round2(bhByMonth[mc.month - 1]); });
         } catch (err) {
           console.error(err);
           alert(isZh ? '解析失败：' + err.message : 'Import failed: ' + err.message);
@@ -1940,6 +2032,7 @@ const app = createApp({
       dt.forEach((t, ti) => t.members.forEach((m, mi) => Object.assign(teams[ti].members[mi], m)));
       defaultScenarios().forEach((s, i) => Object.assign(scenarios[i], s));
       defaultWeights().forEach((v, i) => quarterlyWeights[i] = v);
+      bhMonthly.forEach((_, i) => bhMonthly[i] = 0);
       customAttainment.value = 100;
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -2918,6 +3011,7 @@ th:first-child,td:first-child{text-align:left}
       memberCommQ, memberCommYTD,
       cloudStatus, isEditorMode, reloadFromCloud,
       contributorMembers, contributorQActual, contributorYTD, contributorsTotalYTD,
+      bhMonthly, bhQuarterTotal, bhYtdTotal, bhQuarterBooked,
       accountQActualEmily, accountQActualContributors,
       renderCharts,
     };
