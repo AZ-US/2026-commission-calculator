@@ -1647,10 +1647,11 @@ const app = createApp({
     const ytdAccountTeamComm     = computed(() => [0,1,2,3].reduce((s, qi) => s + accountTeamCommQ(qi), 0));
     const ytdBdTeamComm          = computed(() => [0,1,2,3].reduce((s, qi) => s + bdTeamCommQ(qi), 0));
 
-    // Target commission at 100% attainment — used to compute "提成发放比例" (commission payout ratio)
-    // Planned (100%) Account commission = regular plan members only ($88,531);
-    // Robert's manual B&H commission is outside the plan pool
-    const targetCommAccount = computed(() => teams[0].members.reduce((s, m) => s + (m.manualCommission ? 0 : calcResult(m, 1).annualCommission), 0));
+    // Target commission at 100% attainment — used to compute "提成发放比例" (commission payout ratio).
+    // Every member counts, including Robert on his manual B&H plan: his commission is a real
+    // team cost, and the payout numerator already includes it, so both sides must match or the
+    // ratio flatters itself. This also keeps the figure equal to the HQ Match card's total.
+    const targetCommAccount = computed(() => teams[0].members.reduce((s, m) => s + calcResult(m, 1).annualCommission, 0));
 
     // TCC summary: manual-commission members (Robert) show their actual entered
     // Q1+Q2 total as annual commission, not a simulated plan figure
