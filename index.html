@@ -927,6 +927,128 @@ tr:hover td { background: #f8f9fa; }
         </div>
       </div>
 
+      <!-- Year-over-year -->
+      <div class="card" id="yoyCard" v-if="hasYoyData">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <span>📅 {{ t('同比分析 2026 vs 2025', 'Year-over-Year 2026 vs 2025') }}</span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;font-weight:400;color:#3c4043;white-space:nowrap">
+              {{ t('统计截至', 'Through') }}
+              <select v-model.number="yoy.through" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:5px">
+                <option :value="0">{{ t('自动（最后有数据的月）', 'Auto (last month with data)') }}</option>
+                <option v-for="mm in 12" :key="'yt'+mm" :value="mm">{{ t(mm + ' 月', '2026-' + String(mm).padStart(2,'0')) }}</option>
+              </select>
+            </label>
+            <button @click="exportYoyImage" data-html2canvas-ignore style="font-size:12px;padding:6px 12px;background:#7b1fa2;color:#fff;border:1px solid #7b1fa2;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap">
+              🖼️ {{ t('下载图片', 'Download Image') }}
+            </button>
+          </span>
+        </div>
+        <p style="font-size:12.5px;color:#3c4043;line-height:1.7;margin-bottom:12px">
+          {{ t('导入原始数据时自动抓取 2025、2026 两年的月度收入。「统计截至」用于剔除尚未走完的当月 —— 最新一个月往往只有几天数据，计入会大幅拉低同比。', 'Both 2025 and 2026 monthly revenue are captured on raw-data import. Use "Through" to exclude a month still in progress — the newest month in an export often holds only a few days and would drag the comparison down badly.') }}
+        </p>
+
+        <!-- headline tiles -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px;margin-bottom:16px">
+          <div style="padding:13px;background:#f3eefa;border-left:4px solid #7b1fa2;border-radius:6px">
+            <div style="font-size:12px;color:#3c4043;margin-bottom:3px">{{ t('公司总收入 同比', 'Company revenue YoY') }} · 1–{{ yoyCompare.months }}{{ t(' 月', '') }}</div>
+            <div style="font-size:26px;font-weight:700" :style="yoyCompare.delta >= 0 ? 'color:#0d904f' : 'color:#c5221f'">
+              {{ yoyCompare.delta === null ? '—' : (yoyCompare.delta >= 0 ? '+' : '−') + Math.abs(yoyCompare.delta * 100).toFixed(1) + '%' }}
+            </div>
+            <div style="font-size:12px;color:#3c4043;margin-top:2px">{{ fmtCurrency(yoyCompare.prev) }} → {{ fmtCurrency(yoyCompare.cur) }}</div>
+            <div style="font-size:11.5px;color:#5f6368;margin-top:4px;padding-top:5px;border-top:1px dashed #dadce0">
+              {{ t('差额', 'Gap') }}: <strong :style="yoyCompare.gap >= 0 ? 'color:#0d904f' : 'color:#c5221f'">{{ fmtCurrency(yoyCompare.gap) }}</strong>
+            </div>
+          </div>
+          <div style="padding:13px;background:#f8fbff;border-left:4px solid #1a73e8;border-radius:6px">
+            <div style="font-size:12px;color:#3c4043;margin-bottom:3px">B&H {{ t('同比', 'YoY') }}</div>
+            <div style="font-size:26px;font-weight:700" :style="yoyCompare.bhDelta >= 0 ? 'color:#0d904f' : 'color:#c5221f'">
+              {{ yoyCompare.bhDelta === null ? '—' : (yoyCompare.bhDelta >= 0 ? '+' : '−') + Math.abs(yoyCompare.bhDelta * 100).toFixed(1) + '%' }}
+            </div>
+            <div style="font-size:12px;color:#3c4043;margin-top:2px">{{ fmtCurrency(yoyCompare.bhPrev) }} → {{ fmtCurrency(yoyCompare.bhCur) }}</div>
+            <div style="font-size:11.5px;color:#5f6368;margin-top:4px;padding-top:5px;border-top:1px dashed #dadce0">
+              {{ t('占公司', 'share') }}: {{ fmtPct(yoyCompare.prev ? yoyCompare.bhPrev / yoyCompare.prev : 0) }} → <strong>{{ fmtPct(yoyCompare.cur ? yoyCompare.bhCur / yoyCompare.cur : 0) }}</strong>
+            </div>
+          </div>
+          <div style="padding:13px;background:#f1f8f1;border-left:4px solid #0d904f;border-radius:6px">
+            <div style="font-size:12px;color:#3c4043;margin-bottom:3px">{{ t('非 B&H 业务 同比', 'Non-B&H YoY') }}</div>
+            <div style="font-size:26px;font-weight:700" :style="yoyCompare.othDelta >= 0 ? 'color:#0d904f' : 'color:#c5221f'">
+              {{ yoyCompare.othDelta === null ? '—' : (yoyCompare.othDelta >= 0 ? '+' : '−') + Math.abs(yoyCompare.othDelta * 100).toFixed(1) + '%' }}
+            </div>
+            <div style="font-size:12px;color:#3c4043;margin-top:2px">{{ fmtCurrency(yoyCompare.othPrev) }} → {{ fmtCurrency(yoyCompare.othCur) }}</div>
+            <div style="font-size:11.5px;color:#5f6368;margin-top:4px;padding-top:5px;border-top:1px dashed #dadce0">
+              {{ t('2025 全年', '2025 full year') }}: {{ fmtCurrency(yoyCompare.prevFullYear) }}
+            </div>
+          </div>
+        </div>
+
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('月份', 'Month') }}</th>
+                <th>2025</th>
+                <th style="background:#f3eefa">2026</th>
+                <th>{{ t('同比', 'YoY') }}</th>
+                <th>{{ t('差额', 'Gap') }}</th>
+                <th>B&H 2025</th>
+                <th>B&H 2026</th>
+                <th>B&H {{ t('同比', 'YoY') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="mm in 12" :key="'yr'+mm" :style="mm > yoyCompare.months ? 'color:#9aa0a6' : ''">
+                <td>
+                  <strong>{{ t(mm + ' 月', '2026-' + String(mm).padStart(2,'0')) }}</strong>
+                  <span v-if="mm > yoyCompare.months && yoy.company2026[mm-1]" style="font-size:10px;color:#e67700"> · {{ t('未计入', 'excluded') }}</span>
+                </td>
+                <td>{{ yoy.company2025[mm-1] ? fmtCurrency(yoy.company2025[mm-1]) : '—' }}</td>
+                <td style="background:#faf7fd">{{ yoy.company2026[mm-1] ? fmtCurrency(yoy.company2026[mm-1]) : '—' }}</td>
+                <td>
+                  <span v-if="yoyDelta(yoy.company2025[mm-1], yoy.company2026[mm-1]) === null || !yoy.company2026[mm-1]" style="color:#5f6368">—</span>
+                  <span v-else :style="yoyDelta(yoy.company2025[mm-1], yoy.company2026[mm-1]) >= 0 ? 'color:#0d904f;font-weight:600' : 'color:#c5221f;font-weight:600'">
+                    {{ yoyDelta(yoy.company2025[mm-1], yoy.company2026[mm-1]) >= 0 ? '+' : '−' }}{{ Math.abs(yoyDelta(yoy.company2025[mm-1], yoy.company2026[mm-1]) * 100).toFixed(0) }}%
+                  </span>
+                </td>
+                <td>{{ yoy.company2026[mm-1] ? fmtCurrency(yoy.company2026[mm-1] - yoy.company2025[mm-1]) : '—' }}</td>
+                <td>{{ yoy.bh2025[mm-1] ? fmtCurrency(yoy.bh2025[mm-1]) : '—' }}</td>
+                <td>{{ bhMonthly[mm-1] ? fmtCurrency(bhMonthly[mm-1]) : '—' }}</td>
+                <td>
+                  <span v-if="yoyDelta(yoy.bh2025[mm-1], bhMonthly[mm-1]) === null || !bhMonthly[mm-1]" style="color:#5f6368">—</span>
+                  <span v-else :style="yoyDelta(yoy.bh2025[mm-1], bhMonthly[mm-1]) >= 0 ? 'color:#0d904f;font-weight:600' : 'color:#c5221f;font-weight:600'">
+                    {{ yoyDelta(yoy.bh2025[mm-1], bhMonthly[mm-1]) >= 0 ? '+' : '−' }}{{ Math.abs(yoyDelta(yoy.bh2025[mm-1], bhMonthly[mm-1]) * 100).toFixed(0) }}%
+                  </span>
+                </td>
+              </tr>
+              <tr style="font-weight:700;border-top:2px solid #7b1fa2;background:#f8f9fa">
+                <td>1–{{ yoyCompare.months }} {{ t('月合计', 'total') }}</td>
+                <td>{{ fmtCurrency(yoyCompare.prev) }}</td>
+                <td style="background:#f3eefa">{{ fmtCurrency(yoyCompare.cur) }}</td>
+                <td :style="yoyCompare.delta >= 0 ? 'color:#0d904f' : 'color:#c5221f'">
+                  {{ yoyCompare.delta === null ? '—' : (yoyCompare.delta >= 0 ? '+' : '−') + Math.abs(yoyCompare.delta * 100).toFixed(1) + '%' }}
+                </td>
+                <td>{{ fmtCurrency(yoyCompare.gap) }}</td>
+                <td>{{ fmtCurrency(yoyCompare.bhPrev) }}</td>
+                <td>{{ fmtCurrency(yoyCompare.bhCur) }}</td>
+                <td :style="yoyCompare.bhDelta >= 0 ? 'color:#0d904f' : 'color:#c5221f'">
+                  {{ yoyCompare.bhDelta === null ? '—' : (yoyCompare.bhDelta >= 0 ? '+' : '−') + Math.abs(yoyCompare.bhDelta * 100).toFixed(1) + '%' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:20px">
+          <strong style="font-size:13.5px">📊 {{ t('月度对照', 'Monthly comparison') }}</strong>
+          <button @click="renderCharts" data-html2canvas-ignore style="font-size:12px;padding:6px 12px;background:#e8f0fe;color:#1a73e8;border:1px solid #1a73e8;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap">
+            🔄 {{ t('刷新图表', 'Refresh Chart') }}
+          </button>
+        </div>
+        <div style="position:relative;height:310px;margin-top:8px">
+          <canvas id="chartYoy"></canvas>
+        </div>
+      </div>
+
       <!-- YTD Real-Time Tracking -->
       <div class="card" id="ytdTrackingCard" v-if="ytdActualRevenue > 0 || ytdBdActual > 0">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
@@ -1565,6 +1687,48 @@ const app = createApp({
       return cur && prev ? (cur - prev) / prev : null;
     }
     function bhMonthOwner(i) { return bhQuarterBooked(Math.floor(i / 3)).who; }
+
+    // ===== Year-over-year (同比) =====
+    // Company and B&H revenue by month for 2025 and 2026. `through` is the last month
+    // counted in the comparable subtotal — the newest month in an export is usually
+    // partial, and including it would understate the YoY badly.
+    const yoy = reactive({
+      through: 0,
+      company2025: new Array(12).fill(0),
+      company2026: new Array(12).fill(0),
+      bh2025: new Array(12).fill(0),
+    });
+    const MONTH_KEYS = ['company2025', 'company2026', 'bh2025'];
+    function yoySum(arr, upto) {
+      return arr.reduce((s, v, i) => s + (i < upto ? (v || 0) : 0), 0);
+    }
+    function yoyDelta(a, b) { return !a ? null : (b - a) / a; }
+    const yoyThrough = computed(() => {
+      if (yoy.through >= 1 && yoy.through <= 12) return yoy.through;
+      // Auto: last month with 2026 data, but walk back past a trailing month that is
+      // obviously mid-flight. An export pulled on the 3rd carries ~3 days of that month,
+      // and counting it would drag the whole comparison down.
+      const vals = yoy.company2026.filter(v => v > 0);
+      if (!vals.length) return 0;
+      const sorted = [...vals].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)];
+      let last = yoy.company2026.reduce((l, v, i) => (v ? i + 1 : l), 0);
+      while (last > 1 && yoy.company2026[last - 1] < median * 0.3) last--;
+      return last;
+    });
+    const yoyCompare = computed(() => {
+      const n = yoyThrough.value;
+      const a = yoySum(yoy.company2025, n), b = yoySum(yoy.company2026, n);
+      const bhA = yoySum(yoy.bh2025, n), bhB = yoySum(bhMonthly, n);
+      return {
+        months: n,
+        prev: a, cur: b, delta: yoyDelta(a, b), gap: b - a,
+        bhPrev: bhA, bhCur: bhB, bhDelta: yoyDelta(bhA, bhB),
+        othPrev: a - bhA, othCur: b - bhB, othDelta: yoyDelta(a - bhA, b - bhB),
+        prevFullYear: yoy.company2025.reduce((s, v) => s + (v || 0), 0),
+      };
+    });
+    const hasYoyData = computed(() => yoy.company2025.some(v => v > 0));
     // Who the quarter's B&H revenue is booked under, and what that member's own entry says —
     // lets the card flag a monthly record that no longer ties to the member pages.
     function bhQuarterBooked(qi) {
@@ -1716,7 +1880,7 @@ const app = createApp({
     }
 
     function getState() {
-      return { lang: lang.value, activeTab: activeTab.value, customAttainment: customAttainment.value, teams: JSON.parse(JSON.stringify(teams)), scenarios: JSON.parse(JSON.stringify(scenarios)), quarterlyWeights: [...quarterlyWeights], bhMonthly: [...bhMonthly] };
+      return { lang: lang.value, activeTab: activeTab.value, customAttainment: customAttainment.value, teams: JSON.parse(JSON.stringify(teams)), scenarios: JSON.parse(JSON.stringify(scenarios)), quarterlyWeights: [...quarterlyWeights], bhMonthly: [...bhMonthly], yoy: JSON.parse(JSON.stringify(yoy)) };
     }
 
     function loadState(state) {
@@ -1726,6 +1890,12 @@ const app = createApp({
       if (state.customAttainment) customAttainment.value = state.customAttainment;
       if (state.quarterlyWeights) state.quarterlyWeights.forEach((v, i) => quarterlyWeights[i] = v);
       if (Array.isArray(state.bhMonthly)) state.bhMonthly.forEach((v, i) => { if (i < 12) bhMonthly[i] = v || 0; });
+      if (state.yoy) {
+        if (typeof state.yoy.through === 'number') yoy.through = state.yoy.through;
+        MONTH_KEYS.forEach(k => {
+          if (Array.isArray(state.yoy[k])) state.yoy[k].forEach((v, i) => { if (i < 12) yoy[k][i] = v || 0; });
+        });
+      }
       if (state.scenarios) state.scenarios.forEach((s, i) => { if (scenarios[i]) Object.assign(scenarios[i], s); });
       if (state.teams) {
         state.teams.forEach((st, ti) => {
@@ -1805,7 +1975,7 @@ const app = createApp({
       }, 800);
     }
 
-    watch([teams, scenarios, quarterlyWeights, lang, customAttainment, bhMonthly], autoSave, { deep: true });
+    watch([teams, scenarios, quarterlyWeights, lang, customAttainment, bhMonthly, yoy], autoSave, { deep: true });
 
     function saveToFile() {
       const blob = new Blob([JSON.stringify(getState(), null, 2)], { type: 'application/json' });
@@ -1877,16 +2047,18 @@ const app = createApp({
           const header = rows[headerIdx];
           const custCol = header.indexOf('customer_name');
           const repCol = header.indexOf('salesrep');
-          const monthCols = [];
+          // allCols holds every month column with its year; monthCols (2026 only) drives
+          // member attribution, while allCols also feeds the year-over-year record.
+          const allCols = [];
           // Format A: column header carries the month code, e.g. "net_sales_usd-2601"
           header.forEach((h, ci) => {
             const m = /^net_sales_usd-(\d{2})(\d{2})$/.exec(String(h == null ? '' : h).trim());
-            if (m) monthCols.push({ col: ci, month: parseInt(m[2], 10), quarter: Math.ceil(parseInt(m[2], 10) / 3) });
+            if (m) allCols.push({ col: ci, year: 2000 + parseInt(m[1], 10), month: parseInt(m[2], 10), quarter: Math.ceil(parseInt(m[2], 10) / 3) });
           });
           // Format B: header row has plain "net_sales_usd" and the row ABOVE holds the
           // month date (Date object, Excel serial, or "2026-01-01" string). The "Total"
           // column has no date above it, so it is naturally excluded.
-          if (!monthCols.length && headerIdx > 0) {
+          if (!allCols.length && headerIdx > 0) {
             const dateRow = rows[headerIdx - 1] || [];
             const parseMonth = v => {
               if (v == null) return null;
@@ -1901,15 +2073,20 @@ const app = createApp({
             header.forEach((h, ci) => {
               if (String(h == null ? '' : h).trim() !== 'net_sales_usd') return;
               const d = parseMonth(dateRow[ci]);
-              if (d && d.y === 2026) monthCols.push({ col: ci, month: d.m, quarter: Math.ceil(d.m / 3) });
+              if (d) allCols.push({ col: ci, year: d.y, month: d.m, quarter: Math.ceil(d.m / 3) });
             });
           }
-          if (!monthCols.length) { alert(isZh ? '未找到月度收入列（支持 net_sales_usd-2601 编码列，或表头上方带日期的 net_sales_usd 列）' : 'No monthly revenue columns found (supports net_sales_usd-2601 style headers, or net_sales_usd columns with a date row above)'); return; }
+          // Only 2026 columns drive member attainment; 2025 is kept for the YoY record
+          const monthCols = allCols.filter(c => c.year === 2026);
+          if (!monthCols.length) { alert(isZh ? '未找到 2026 年月度收入列（支持 net_sales_usd-2601 编码列，或表头上方带日期的 net_sales_usd 列）' : 'No 2026 monthly revenue columns found (supports net_sales_usd-2601 style headers, or net_sales_usd columns with a date row above)'); return; }
           const quartersInFile = [...new Set(monthCols.map(c => c.quarter))].sort();
+          const prevCols = allCols.filter(c => c.year === 2025);
 
           const byRep = {}; const grand = [0, 0, 0, 0]; const bhCustomer = [0, 0, 0, 0];
           const bhByMonth = new Array(12).fill(0);
           const reassigned = [];
+          // year-over-year capture: company + B&H by month, per year
+          const co26 = new Array(12).fill(0), co25 = new Array(12).fill(0), bh25 = new Array(12).fill(0);
           for (let i = headerIdx + 1; i < rows.length; i++) {
             const r = rows[i];
             if (!r || !r[custCol] || !r[repCol]) continue;
@@ -1927,6 +2104,13 @@ const app = createApp({
               byRep[rep][mc.quarter - 1] += v;
               grand[mc.quarter - 1] += v;
               if (isBh) { bhCustomer[mc.quarter - 1] += v; bhByMonth[mc.month - 1] += v; }
+              co26[mc.month - 1] += v;
+            }
+            for (const pc of prevCols) {
+              const v = parseFloat(r[pc.col]);
+              if (!isFinite(v)) continue;
+              co25[pc.month - 1] += v;
+              if (isBh) bh25[pc.month - 1] += v;
             }
           }
 
@@ -2013,6 +2197,12 @@ const app = createApp({
           });
           // B&H monthly record — only the months this file actually covers
           monthCols.forEach(mc => { bhMonthly[mc.month - 1] = round2(bhByMonth[mc.month - 1]); });
+          // Year-over-year record, likewise limited to the months present in the file
+          monthCols.forEach(mc => { yoy.company2026[mc.month - 1] = round2(co26[mc.month - 1]); });
+          prevCols.forEach(pc => {
+            yoy.company2025[pc.month - 1] = round2(co25[pc.month - 1]);
+            yoy.bh2025[pc.month - 1] = round2(bh25[pc.month - 1]);
+          });
         } catch (err) {
           console.error(err);
           alert(isZh ? '解析失败：' + err.message : 'Import failed: ' + err.message);
@@ -2092,6 +2282,8 @@ const app = createApp({
       defaultScenarios().forEach((s, i) => Object.assign(scenarios[i], s));
       defaultWeights().forEach((v, i) => quarterlyWeights[i] = v);
       bhMonthly.forEach((_, i) => bhMonthly[i] = 0);
+      yoy.through = 0;
+      MONTH_KEYS.forEach(k => yoy[k].forEach((_, i) => yoy[k][i] = 0));
       customAttainment.value = 100;
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -2480,6 +2672,49 @@ const app = createApp({
           });
         }
 
+        // 4c. Year-over-year: 2025 vs 2026 by month, with the YoY % on a right axis
+        const ctxYoy = document.getElementById('chartYoy');
+        if (ctxYoy) {
+          const isZh = lang.value === 'zh';
+          const mLabels = [...Array(12)].map((_, i) => isZh ? (i + 1) + '月'
+            : new Date(2026, i, 1).toLocaleDateString('en-US', { month: 'short' }));
+          const money = v => v >= 1e6 ? '$' + (v / 1e6).toFixed(2) + 'M' : '$' + Math.round(v / 1000) + 'K';
+          const pctSeries = yoy.company2025.map((a, i) => {
+            const b = yoy.company2026[i] || 0;
+            return a && b ? (b - a) / a * 100 : null;
+          });
+          charts.yoy = new Chart(ctxYoy, {
+            data: {
+              labels: mLabels,
+              datasets: [
+                { type: 'bar', label: '2025', data: yoy.company2025.map(v => v || null),
+                  backgroundColor: '#c8b3dd', borderColor: '#9a7bbd', borderWidth: 1, order: 3 },
+                { type: 'bar', label: '2026', data: yoy.company2026.map(v => v || null),
+                  backgroundColor: '#7b1fa2', borderColor: '#7b1fa2', borderWidth: 1, order: 2 },
+                { type: 'line', label: isZh ? '同比 %' : 'YoY %', data: pctSeries, yAxisID: 'y1',
+                  borderColor: '#e8710a', backgroundColor: '#e8710a', borderWidth: 2,
+                  tension: 0.3, pointRadius: 3, spanGaps: true, order: 1 }
+              ]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: {
+                title: { display: true, text: isZh ? '公司总收入：2026 vs 2025（橙线为同比）' : 'Company revenue: 2026 vs 2025 (orange = YoY %)' },
+                tooltip: { callbacks: { label: c => c.dataset.yAxisID === 'y1'
+                  ? `${c.dataset.label}: ${c.parsed.y == null ? '—' : c.parsed.y.toFixed(1) + '%'}`
+                  : `${c.dataset.label}: ${c.parsed.y == null ? '—' : money(c.parsed.y)}` } }
+              },
+              scales: {
+                y: { beginAtZero: true, grace: '10%', title: { display: true, text: isZh ? '收入' : 'Revenue' },
+                     ticks: { callback: v => '$' + (v / 1e6).toFixed(1) + 'M' } },
+                y1: { position: 'right', grid: { drawOnChartArea: false },
+                      title: { display: true, text: isZh ? '同比 %' : 'YoY %' },
+                      ticks: { callback: v => v + '%' } }
+              }
+            }
+          });
+        }
+
         // 5. Quarterly Revenue: Target vs Actual (Account + BD)
         const ctx5 = document.getElementById('chartQuarterlyRev');
         if (ctx5) {
@@ -2601,6 +2836,7 @@ const app = createApp({
     }
     function exportYtdImage() { return exportCardImage('ytdTrackingCard', 'YTD_Tracking'); }
     function exportBhImage()  { return exportCardImage('bhMonthlyCard', 'BH_Monthly'); }
+    function exportYoyImage() { return exportCardImage('yoyCard', 'YoY_2026_vs_2025'); }
 
     // Export ONLY the All-Team Commission Summary card as a printable PDF report
     function exportAllTeamComm() {
@@ -3145,7 +3381,7 @@ th:first-child,td:first-child{text-align:left}
       lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
       t, fmtCurrency, fmtPct, fmtInt, fmtIntNoZero, parseNumInput, calcResult, customResult,
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
-      weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary, exportAllTeamComm, exportYtdImage, exportBhImage,
+      weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary, exportAllTeamComm, exportYtdImage, exportBhImage, exportYoyImage,
       exportMemberExcel, exportAllExcel,
       saveToFile, loadFromFile, importRawData, importBdData, resetDefaults,
       memberActualQ, memberActualYTD,
@@ -3161,6 +3397,7 @@ th:first-child,td:first-child{text-align:left}
       cloudStatus, isEditorMode, reloadFromCloud,
       contributorMembers, contributorQActual, contributorYTD, contributorsTotalYTD,
       bhMonthly, bhQuarterTotal, bhYtdTotal, bhQuarterBooked, bhMoM, bhMonthOwner,
+      yoy, yoyDelta, yoyCompare, hasYoyData,
       accountQActualEmily, accountQActualContributors,
       renderCharts,
     };
