@@ -837,8 +837,14 @@ tr:hover td { background: #f8f9fa; }
       </div>
 
       <!-- B&H monthly revenue record -->
-      <div class="card">
-        <div class="card-title">🏢 {{ t('B&H 月度完成记录', 'B&H Monthly Revenue Record') }}</div>
+      <div class="card" id="bhMonthlyCard">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <span>🏢 {{ t('B&H 月度完成记录', 'B&H Monthly Revenue Record') }}</span>
+          <button @click="exportBhImage" data-html2canvas-ignore :title="t('把此模块保存为 PNG 图片', 'Save this card as a PNG image')"
+                  style="font-size:12px;padding:6px 12px;background:#0d904f;color:#fff;border:1px solid #0d904f;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap">
+            🖼️ {{ t('下载图片', 'Download Image') }}
+          </button>
+        </div>
         <p style="font-size:12.5px;color:#3c4043;line-height:1.7;margin-bottom:12px">
           {{ t('单独记录 B&H 客户每月净销售额。导入原始数据时自动按「BH PHOTO VIDEO」客户行填充，也可手动录入或校准。归属：Q1、Q2 在 Robert 名下，Q3 起回到 Emily（计入她的 B&H 分支）。', 'A standalone record of the B&H account\'s monthly net sales. Auto-filled from the "BH PHOTO VIDEO" customer rows on raw-data import; can also be typed or adjusted by hand. Attribution: Q1 & Q2 sit under Robert, from Q3 the account returns to Emily (her B&H branch).') }}
         </p>
@@ -909,7 +915,7 @@ tr:hover td { background: #f8f9fa; }
         <!-- B&H monthly trend -->
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:20px">
           <strong style="font-size:13.5px">📊 {{ t('B&H 月度走势', 'B&H Monthly Trend') }}</strong>
-          <button @click="renderCharts" style="font-size:12px;padding:6px 12px;background:#e8f0fe;color:#1a73e8;border:1px solid #1a73e8;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap">
+          <button @click="renderCharts" data-html2canvas-ignore style="font-size:12px;padding:6px 12px;background:#e8f0fe;color:#1a73e8;border:1px solid #1a73e8;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap">
             🔄 {{ t('刷新图表', 'Refresh Chart') }}
           </button>
         </div>
@@ -2563,23 +2569,38 @@ const app = createApp({
       });
     }
 
-    // Save the YTD Real-Time Tracking card as a PNG image
-    async function exportYtdImage() {
+    // Save a dashboard card as a PNG. Editable inputs are swapped for plain text for the
+    // duration of the capture — html2canvas is unreliable about drawing input values, and a
+    // picture with an empty column would be worse than none.
+    async function exportCardImage(elId, baseName) {
       const isZh = lang.value === 'zh';
+      const swapped = [];
       try {
-        const el = document.getElementById('ytdTrackingCard');
+        const el = document.getElementById(elId);
         if (!el) return;
         const h2c = await loadHtml2Canvas();
+        el.querySelectorAll('input').forEach(inp => {
+          const span = document.createElement('span');
+          span.textContent = inp.value || '0';
+          span.style.cssText = 'font-size:13px;font-weight:600;white-space:nowrap';
+          inp.parentNode.insertBefore(span, inp);
+          inp.style.display = 'none';
+          swapped.push({ inp, span });
+        });
         const canvas = await h2c(el, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
         const a = document.createElement('a');
         a.href = canvas.toDataURL('image/png');
-        a.download = `YTD_Tracking_${new Date().toISOString().slice(0, 10)}.png`;
+        a.download = `${baseName}_${new Date().toISOString().slice(0, 10)}.png`;
         a.click();
       } catch (e) {
         console.error(e);
         alert(isZh ? '图片生成失败：' + e.message : 'Image export failed: ' + e.message);
+      } finally {
+        swapped.forEach(({ inp, span }) => { span.remove(); inp.style.display = ''; });
       }
     }
+    function exportYtdImage() { return exportCardImage('ytdTrackingCard', 'YTD_Tracking'); }
+    function exportBhImage()  { return exportCardImage('bhMonthlyCard', 'BH_Monthly'); }
 
     // Export ONLY the All-Team Commission Summary card as a printable PDF report
     function exportAllTeamComm() {
@@ -3124,7 +3145,7 @@ th:first-child,td:first-child{text-align:left}
       lang, activeTab, customAttainment, teams, scenarios, quarterlyWeights,
       t, fmtCurrency, fmtPct, fmtInt, fmtIntNoZero, parseNumInput, calcResult, customResult,
       teamBaseTotal, teamCommTotal, grandBaseTotal, grandCommTotal,
-      weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary, exportAllTeamComm, exportYtdImage,
+      weightWarning, scenarioClass, exportEmployee, exportQuarterlyReport, exportQuarterSummary, exportAllTeamComm, exportYtdImage, exportBhImage,
       exportMemberExcel, exportAllExcel,
       saveToFile, loadFromFile, importRawData, importBdData, resetDefaults,
       memberActualQ, memberActualYTD,
