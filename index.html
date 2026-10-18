@@ -2444,10 +2444,13 @@ const app = createApp({
     // grand-total row has none) and Q2 "JM Q2 Deals" / "Daniel Q2 Deals" / "Dash Q2 Deals"
     // (no Record ID — anchor on Deal Name; a "TOTAL:" row follows the data and is skipped).
     // Quarter comes from the file name (e.g. "... Q2 2026.xlsx").
+    // Sheet names drift every quarter — "Dan" (Q1), "Daniel Q2 Deals" (Q2), "Closed Deal
+    // Overview- Dan Colme" (Q3) — so match any recognisable form of the name anywhere in
+    // the tab rather than a fixed prefix, surname included.
     const BD_IMPORT_SHEETS = [
-      { match: n => n.includes('jon') || /\bjm\b/.test(n), id: 'jonathan' },
-      { match: n => /^dan\b/.test(n) || n.includes('daniel'), id: 'daniel' },
-      { match: n => n.includes('dash'), id: 'dash' },
+      { match: n => /jon|\bjm\b/.test(n), id: 'jonathan' },
+      { match: n => /\bdan|daniel|colme/.test(n), id: 'daniel' },
+      { match: n => /dash|escro|escra/.test(n), id: 'dash' },
     ];
 
     function importBdData(e) {
